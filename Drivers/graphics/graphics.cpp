@@ -1940,7 +1940,7 @@ void ST77XX::init(unsigned int freq)
 		delay(255);
 	}
 
-	if (_res == _320x240) // ST7735S
+	if (_res == _320x240) // ILI9341 / ST7789
 	{
 #if 0
 		ST77XXSPI_LCD_WRITE_COM(ST7735_SWRESET);// 1: Software reset, no args, w/delay
@@ -2111,6 +2111,37 @@ void ST77XX::drawVLine(short x, short y, int l)
 	}
 	setXY(x, y, x, y + l);
 	SPI.writeShort(fg565, l);
+}
+
+void ST77XX::drawCompressed24bitBitmap(short x, short y, const unsigned int * dataArray)
+{
+	unsigned int	hight, width;
+	unsigned int	buffer;
+	int				index = 0;
+	unsigned short  rgb565;
+	unsigned char	r, g, b;
+
+	width = dataArray[index];
+	index++;
+
+	buffer = dataArray[index];
+	hight = buffer;
+	index++;
+
+	unsigned int dataArraySize = hight * width, i, j, counter = 0;
+	unsigned char copies;
+
+	setXY(x, y, x + width - 1, y + hight - 1);
+	for (i = DATA_START_OFFSET; counter < dataArraySize; i++)
+	{
+		buffer = dataArray[index];
+		index++;
+		copies = (buffer >> 24);
+		//SPI.writeRGB(buffer & 0x00ffffff, copies);
+		rgb565 = rgbTo565((buffer & 0x000000ff), (buffer & 0x0000ffff) >> 8, (buffer & 0x00ffffff) >> 16);
+		SPI.writeShort(rgb565, copies);
+		counter += copies;
+	}
 }
 
 ///////////////////////////////////// TVout /////////////////////////////////////////
