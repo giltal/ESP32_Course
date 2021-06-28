@@ -126,6 +126,7 @@ void setup()
 	pinMode(SPEAKER_PIN, OUTPUT);
 	pcf8574.pinMode(3, INPUT);
 	pcf8574.pinMode(2, INPUT);
+	pcf8574.pinMode(1, INPUT);
 	ledcSetup(0, 2000, 8);
 	ledcAttachPin(SPEAKER_PIN, 0);
 
@@ -328,4 +329,5 @@ void game_over()
 	lcd.print("Press B2", 0, 100, true);
 	lcd.flushFB();
 	while (pcf8574.digitalRead(2) == LOW);
+	while (pcf8574.digitalRead(2) == HIGH);
 }

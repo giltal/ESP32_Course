@@ -242,6 +242,7 @@ void PCF8574::readBuffer(bool force){
  * @param pin
  * @return
  */
+#if 0
 uint8_t PCF8574::digitalRead(uint8_t pin){
 	uint8_t value = LOW;
 	DEBUG_PRINT("Read pin ");
@@ -285,7 +286,40 @@ uint8_t PCF8574::digitalRead(uint8_t pin){
 	DEBUG_PRINTLN(value);
 	return value;
 };
+#else
+uint8_t PCF8574::digitalRead(uint8_t pin) {
+	uint8_t value = LOW;
+		Wire.requestFrom(_address, (uint8_t)1);// Begin transmission to PCF8574 with the buttons
+		lastReadMillis = millis();
+		if (Wire.available())   // If bytes are available to be recieved
+		{
+			DEBUG_PRINTLN("Data ready");
+			byte iInput = Wire.read();// Read a byte
 
+			if ((iInput & readMode) > 0) {
+				DEBUG_PRINT("Input ");
+				DEBUG_PRINTLN((byte)iInput, BIN);
+
+				byteBuffered = byteBuffered | (byte)iInput;
+				DEBUG_PRINT("byteBuffered ");
+				DEBUG_PRINTLN(byteBuffered, BIN);
+
+				if ((bit(pin) & byteBuffered) > 0) {
+					value = HIGH;
+				}
+			}
+		}
+	if (value == HIGH) 
+	{
+		byteBuffered = ~bit(pin) & byteBuffered;
+		DEBUG_PRINT("Buffer hight value readed set readed ");
+		DEBUG_PRINTLN(byteBuffered, BIN);
+	}
+	DEBUG_PRINT("Return value ");
+	DEBUG_PRINTLN(value);
+	return value;
+};
+#endif
 /**
  * Write on pin
  * @param pin
