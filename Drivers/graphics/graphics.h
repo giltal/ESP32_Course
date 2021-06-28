@@ -54,59 +54,6 @@ class graphics
 		void	print(char * string, short x, short y,bool center = false);
 };
 
-#define INITR_GREENTAB 0x0
-#define INITR_REDTAB   0x1
-#define INITR_BLACKTAB   0x2
-
-#define ST7735_TFTWIDTH  128
-#define ST7735_TFTHEIGHT 160
-
-#define ST7735_NOP     0x00
-#define ST7735_SWRESET 0x01
-#define ST7735_RDDID   0x04
-#define ST7735_RDDST   0x09
-
-#define ST7735_SLPIN   0x10
-#define ST7735_SLPOUT  0x11
-#define ST7735_PTLON   0x12
-#define ST7735_NORON   0x13
-
-#define ST7735_INVOFF  0x20
-#define ST7735_INVON   0x21
-#define ST7735_DISPOFF 0x28
-#define ST7735_DISPON  0x29
-#define ST7735_CASET   0x2A
-#define ST7735_RASET   0x2B
-#define ST7735_RAMWR   0x2C
-#define ST7735_RAMRD   0x2E
-
-#define ST7735_PTLAR   0x30
-#define ST7735_COLMOD  0x3A
-#define ST7735_MADCTL  0x36
-
-#define ST7735_FRMCTR1 0xB1
-#define ST7735_FRMCTR2 0xB2
-#define ST7735_FRMCTR3 0xB3
-#define ST7735_INVCTR  0xB4
-#define ST7735_DISSET5 0xB6
-
-#define ST7735_PWCTR1  0xC0
-#define ST7735_PWCTR2  0xC1
-#define ST7735_PWCTR3  0xC2
-#define ST7735_PWCTR4  0xC3
-#define ST7735_PWCTR5  0xC4
-#define ST7735_VMCTR1  0xC5
-
-#define ST7735_RDID1   0xDA
-#define ST7735_RDID2   0xDB
-#define ST7735_RDID3   0xDC
-#define ST7735_RDID4   0xDD
-
-#define ST7735_PWCTR6  0xFC
-
-#define ST7735_GMCTRP1 0xE0
-#define ST7735_GMCTRN1 0xE1
-
 #define ST77XXSPI_COMMAND			0
 #define ST77XXSPI_DATA				1
 #define noNATIVE_VSPI
@@ -149,6 +96,10 @@ class graphics
 
 enum ST77XXres { _135x240, _240x135, _320x240 };
 
+typedef enum { noflip = 0, flipX = 1, flipY = 2, flipXY = 3 }
+flipOption;
+
+
 class ST77XX : public graphics
 {
 private:
@@ -184,12 +135,27 @@ public:
 	void setXY(short x1, short y1, short x2, short y2);
 	void setXY(short x, short y);
 	void init(unsigned int freq = 40000000L);
+	virtual void drawPixel(short x, short y);
+	virtual void fillScr(unsigned char r, unsigned char g, unsigned char b);
+	virtual void drawHLine(short x, short y, int l);
+	virtual void drawVLine(short x, short y, int l);
+	void drawCompressed24bitBitmap(short x, short y, const unsigned int * dataArray);
+};
+
+class ST77XX_FB : public ST77XX
+{
+private:
+	unsigned short * frameBuffer;
+public:
+	ST77XX_FB() : ST77XX(_240x135){}; // only 240x135 is supported in this mode
+	~ST77XX_FB();
+	bool init(unsigned int freq = 40000000L);
 	void drawPixel(short x, short y);
 	void fillScr(unsigned char r, unsigned char g, unsigned char b);
 	void drawHLine(short x, short y, int l);
 	void drawVLine(short x, short y, int l);
-	void drawCompressed24bitBitmap(short x, short y, const unsigned int * dataArray);
-	void drawCompressedGrayScaleBitmap(short x, short y, const unsigned short * dataArray, bool invert = false);
+	void flushFB();
+	void draw8bBitMap(short x, short y, const unsigned char * dataArray, bool useSkipBit, flipOption flipOpt = noflip);
 };
 
 /********** ILI9488 8/9 bit parallel **********/
@@ -367,9 +333,6 @@ public:
 typedef enum { singleFrameBuffer = 0, dualFrameBuffers = 1, directMode = 3 }
 ili9488_8C_mode;
 
-typedef enum { noflip = 0, flipX = 1, flipY = 2 , flipXY = 3}
-ili9488_8C_flipOption;
-
 class ILI9488SPI_8C : public ILI9488SPI_BASE
 {
 private:
@@ -393,7 +356,7 @@ public:
 	inline bool isFGbitSet(short x, short y);
 	void fillScr(unsigned char r, unsigned char g,unsigned char b);
 	void drawHLine(short x, short y, int l);
-	bool drawBitmap(short x, short y, const unsigned char * dataArray, bool useSkipBit, ili9488_8C_flipOption flipOpt = noflip);
+	bool drawBitmap(short x, short y, const unsigned char * dataArray, bool useSkipBit, flipOption flipOpt = noflip);
 	void flushFrameBuffer();
 	//int	 swapFrameBuffer();
 };

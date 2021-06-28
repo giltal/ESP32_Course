@@ -1736,7 +1736,7 @@ inline bool ILI9488SPI_8C::isFGbitSet(short x, short y)
 		if (X < maxX && Y < maxY) {\
 		if (!isFGbitSet(X, Y)) drawPixel(X, Y, (PIX_DATA) & 0x7); else collision = true;}
 
-bool ILI9488SPI_8C::drawBitmap(short x, short y, const unsigned char * dataArray,bool useSkipBit, ili9488_8C_flipOption flipOpt)
+bool ILI9488SPI_8C::drawBitmap(short x, short y, const unsigned char * dataArray,bool useSkipBit, flipOption flipOpt)
 {
 	bool collision = false;
 	unsigned char pixelData;
@@ -1940,85 +1940,8 @@ void ST77XX::init(unsigned int freq)
 		delay(255);
 	}
 
-	if (_res == _320x240) // ILI9341 / ST7789
+	if (_res == _320x240) // ILI9341
 	{
-#if 0
-		ST77XXSPI_LCD_WRITE_COM(ST7735_SWRESET);// 1: Software reset, no args, w/delay
-		delay(250);
-		ST77XXSPI_LCD_WRITE_COM(ST7735_SLPOUT); // 2: Out of sleep mode, no args, w/delay
-		delay(255);
-		ST77XXSPI_LCD_WRITE_COM(ST7735_COLMOD); // 3: Set color mode, 1 arg + delay:
-		ST77XXSPI_LCD_WRITE_DATA8(0x05);		// 16-bit color
-		delay(10);								// 10 ms delay
-		ST77XXSPI_LCD_WRITE_COM(ST7735_FRMCTR1);// 4: Frame rate control, 3 args + delay:
-		ST77XXSPI_LCD_WRITE_DATA8(0x00);// fastest refresh
-		ST77XXSPI_LCD_WRITE_DATA8(0x06);// 6 lines front porch
-		ST77XXSPI_LCD_WRITE_DATA8(0x03);// 3 lines back porch
-		delay(10);                     //     10 ms delay
-		ST77XXSPI_LCD_WRITE_COM(ST7735_MADCTL); //  5: Memory access ctrl (directions), 1 arg:
-		ST77XXSPI_LCD_WRITE_DATA8(0b11111100);//                   //     Row addr/col addr, bottom to top refresh
-		ST77XXSPI_LCD_WRITE_COM(ST7735_DISSET5);// 6: Display settings #5, 2 args, no delay:
-		ST77XXSPI_LCD_WRITE_DATA8(0x15); // 1 clk cycle nonoverlap, 2 cycle gate, rise, 3 cycle osc equalize
-		ST77XXSPI_LCD_WRITE_DATA8(0x02);    //     Fix on VTL
-		ST77XXSPI_LCD_WRITE_COM(ST7735_INVCTR);//  7: Display inversion control, 1 arg:
-		ST77XXSPI_LCD_WRITE_DATA8(0x6);              //     Line inversion
-		ST77XXSPI_LCD_WRITE_COM(ST7735_INVON);//  7: Display inversion control, 1 arg:
-		ST77XXSPI_LCD_WRITE_COM(ST7735_PWCTR1); //  8: Power control, 2 args + delay:
-		ST77XXSPI_LCD_WRITE_DATA8(0x60);                   //     GVDD = 4.7V
-		ST77XXSPI_LCD_WRITE_DATA8(0x00);                   //     1.0uA
-		ST77XXSPI_LCD_WRITE_DATA8(0x84);
-		delay(10);	                     //     10 ms delay
-		ST77XXSPI_LCD_WRITE_COM(ST7735_PWCTR2); //  9: Power control, 1 arg, no delay:
-		ST77XXSPI_LCD_WRITE_DATA8(0x05);        //     VGH = 14.7V, VGL = -7.35V
-		ST77XXSPI_LCD_WRITE_COM(ST7735_PWCTR3); // 10: Power control, 2 args, no delay:
-		ST77XXSPI_LCD_WRITE_DATA8(0x01);       //     Opamp current small
-		ST77XXSPI_LCD_WRITE_DATA8(0x02);       //     Boost frequency
-		ST77XXSPI_LCD_WRITE_COM(ST7735_VMCTR1);// 11: Power control, 2 args + delay:
-		ST77XXSPI_LCD_WRITE_DATA8(0x3C);      //     VCOMH = 4V
-		ST77XXSPI_LCD_WRITE_DATA8(0x38);     //     VCOML = -1.1V
-		delay(10);	                     //     10 ms delay
-		ST77XXSPI_LCD_WRITE_COM(ST7735_PWCTR6); // 12: Power control, 2 args, no delay:
-		ST77XXSPI_LCD_WRITE_DATA8(0x11);
-		ST77XXSPI_LCD_WRITE_DATA8(0x15);
-		ST77XXSPI_LCD_WRITE_COM(ST7735_GMCTRP1); // 13: Magical unicorn dust, 16 args, no delay:
-		ST77XXSPI_LCD_WRITE_DATA8(0x09);
-		ST77XXSPI_LCD_WRITE_DATA8(0x16);
-		ST77XXSPI_LCD_WRITE_DATA8(0x09);
-		ST77XXSPI_LCD_WRITE_DATA8(0x20); //     (seriously though, not sure what
-		ST77XXSPI_LCD_WRITE_DATA8(0x21);
-		ST77XXSPI_LCD_WRITE_DATA8(0x1B);
-		ST77XXSPI_LCD_WRITE_DATA8(0x13);
-		ST77XXSPI_LCD_WRITE_DATA8(0x19); //      these config values represent)
-		ST77XXSPI_LCD_WRITE_DATA8(0x17);
-		ST77XXSPI_LCD_WRITE_DATA8(0x15);
-		ST77XXSPI_LCD_WRITE_DATA8(0x1E);
-		ST77XXSPI_LCD_WRITE_DATA8(0x2B);
-		ST77XXSPI_LCD_WRITE_DATA8(0x04);
-		ST77XXSPI_LCD_WRITE_DATA8(0x05);
-		ST77XXSPI_LCD_WRITE_DATA8(0x02);
-		ST77XXSPI_LCD_WRITE_DATA8(0x0E);
-		ST77XXSPI_LCD_WRITE_COM(ST7735_GMCTRN1);// 14: Sparkles and rainbows, 16 args + delay:
-		ST77XXSPI_LCD_WRITE_DATA8(0x0B);
-		ST77XXSPI_LCD_WRITE_DATA8(0x14);
-		ST77XXSPI_LCD_WRITE_DATA8(0x08);
-		ST77XXSPI_LCD_WRITE_DATA8(0x1E);//     (ditto)
-		ST77XXSPI_LCD_WRITE_DATA8(0x22);
-		ST77XXSPI_LCD_WRITE_DATA8(0x1D);
-		ST77XXSPI_LCD_WRITE_DATA8(0x18);
-		ST77XXSPI_LCD_WRITE_DATA8(0x1E);
-		ST77XXSPI_LCD_WRITE_DATA8(0x1B);
-		ST77XXSPI_LCD_WRITE_DATA8(0x1A);
-		ST77XXSPI_LCD_WRITE_DATA8(0x24);
-		ST77XXSPI_LCD_WRITE_DATA8(0x2B);
-		ST77XXSPI_LCD_WRITE_DATA8(0x06);
-		ST77XXSPI_LCD_WRITE_DATA8(0x06);
-		ST77XXSPI_LCD_WRITE_DATA8(0x02);
-		ST77XXSPI_LCD_WRITE_DATA8(0x0F);
-		ST77XXSPI_LCD_WRITE_COM(ST7735_NORON);// 17: Normal display on, no args, w/delay
-		delay(10);	                     //     10 ms delay
-		ST77XXSPI_LCD_WRITE_COM(ST7735_DISPON); // 18: Main screen turn on, no args, w/delay
-		delay(255);
-#endif
 		ST77XXSPI_LCD_WRITE_COM(0x11);//sleep out 
 		delay(20);
 		ST77XXSPI_LCD_WRITE_COM(0x28); //display off
@@ -2143,6 +2066,181 @@ void ST77XX::drawCompressed24bitBitmap(short x, short y, const unsigned int * da
 		counter += copies;
 	}
 }
+
+/***************** ST7789 - 240x135 Frame Buffer mode ****************************/
+
+ST77XX_FB::~ST77XX_FB()
+{
+	if (!frameBuffer)
+		delete[] frameBuffer;
+}
+
+bool ST77XX_FB::init(unsigned int freq)
+{
+	frameBuffer = new unsigned short[240*135];
+	if (!frameBuffer)
+	{
+		printf("Cannot allocate frame buffer!\n");
+		return false;
+	}
+	ST77XX::init(freq);
+
+	return true;
+}
+
+void ST77XX_FB::drawPixel(short x, short y)
+{
+	if (x < 240 && y < 135)
+	{
+		frameBuffer[y * 240 + x] = fg565;
+	}
+}
+
+void ST77XX_FB::fillScr(unsigned char r, unsigned char g, unsigned char b)
+{
+	unsigned short color = (((b >> 3) | (g << 5)) << 8) | ((r & 0xF8) | (g >> 5));
+	unsigned int tempC = (color << 16) | color;
+	unsigned int * tempPointer = (unsigned int *)(frameBuffer);
+	
+	for (size_t i = 0; i < 240*135/2; i++)
+	{
+		tempPointer[i] = tempC;
+	}
+}
+
+void ST77XX_FB::flushFB()
+{
+	setXY(0, 0, maxX - 1, maxY - 1);
+	SPI.writeBuffer((unsigned int *)(frameBuffer), 240*135/2);
+}
+
+void ST77XX_FB::drawHLine(short x, short y, int l)
+{
+	unsigned int fixedL, i;
+	if (x + l >= maxX)
+	{
+		fixedL = maxX;
+	}
+	else
+		fixedL = (x + l);
+	for (i = x; i < fixedL; i++)
+	{
+		frameBuffer[240 * y + i] = fg565;
+	}
+}
+
+void ST77XX_FB::drawVLine(short x, short y, int l)
+{
+	unsigned int fixedL, i;
+	if (y + l >= maxX)
+	{
+		fixedL = maxY;
+	}
+	else
+		fixedL = (y + l);
+	for (i = y; i < fixedL; i++)
+	{
+		frameBuffer[240 * i + x] = fg565;
+	}
+}
+
+#define DRAW_PIX_FAST(X,Y,PIX_DATA)\
+		if (X < maxX && Y < maxY) {\
+		frameBuffer[240*Y + X] = colorTable[(PIX_DATA) & 0x7];}
+
+void ST77XX_FB::draw8bBitMap(short x, short y, const unsigned char * dataArray, bool useSkipBit, flipOption flipOpt)
+{
+	static unsigned short colorTable[8];
+	colorTable[0] = rgbTo565(0, 0, 0);
+	colorTable[1] = rgbTo565(0, 0, 0xff);
+	colorTable[2] = rgbTo565(0, 0xff, 0);
+	colorTable[3] = rgbTo565(0, 0xff, 0xff);
+	colorTable[4] = rgbTo565(0xff, 0, 0);
+	colorTable[5] = rgbTo565(0xff, 0, 0xff);
+	colorTable[6] = rgbTo565(0xff, 0xff, 0);
+	colorTable[7] = rgbTo565(0xff, 0xff, 0xff);
+
+	unsigned char pixelData;
+	unsigned short width, hight;
+	unsigned int index = 4, size;
+	width = (dataArray[0] << 8) | dataArray[1];
+	hight = (dataArray[2] << 8) | dataArray[3];
+	size = (width / 2 + (width & 01 == 1)) * hight;
+
+	if (flipOpt == flipY || flipOpt == flipXY)
+	{
+		for (int iy = (y + hight - 1); iy >= y; iy--)
+		{
+			if (flipOpt == flipX || flipOpt == flipXY)
+			{
+				for (int ix = (x + width - 1); ix >= x; ix -= 2)
+				{
+					pixelData = dataArray[index++];
+					if (((pixelData & 0x80) != 0x80) || !useSkipBit) // First pixel
+					{
+						DRAW_PIX_FAST(ix, iy, pixelData >> 4);
+					}
+					if (((pixelData & 0x08) != 0x08) && (ix < (x + width)) || !useSkipBit) // Second Pixel
+					{
+						DRAW_PIX_FAST(ix - 1, iy, pixelData);
+					}
+				}
+			}
+			else
+			{
+				for (int ix = x; ix < (x + width); ix += 2)
+				{
+					pixelData = dataArray[index++];
+					if (((pixelData & 0x80) != 0x80) || !useSkipBit) // First pixel
+					{
+						DRAW_PIX_FAST(ix, iy, pixelData >> 4);
+					}
+					if ((((pixelData & 0x08) != 0x08) && ((ix + 1) < (x + width))) || !useSkipBit) // Second Pixel
+					{
+						DRAW_PIX_FAST(ix + 1, iy, pixelData);
+					}
+				}
+			}
+		}
+	}
+	else
+	{
+		for (int iy = y; iy < (y + hight); iy++)
+		{
+			if (flipOpt == flipX || flipOpt == flipXY)
+			{
+				for (int ix = (x + width - 1); ix >= x; ix -= 2)
+				{
+					pixelData = dataArray[index++];
+					if (((pixelData & 0x80) != 0x80) || !useSkipBit) // First pixel
+					{
+						DRAW_PIX_FAST(ix, iy, pixelData >> 4);
+					}
+					if (((pixelData & 0x08) != 0x08) && (ix < (x + width)) || !useSkipBit) // Second Pixel
+					{
+						DRAW_PIX_FAST(ix - 1, iy, pixelData);
+					}
+				}
+			}
+			else
+			{
+				for (int ix = x; ix < (x + width); ix += 2)
+				{
+					pixelData = dataArray[index++];
+					if (((pixelData & 0x80) != 0x80) || !useSkipBit) // First pixel
+					{
+						DRAW_PIX_FAST(ix, iy, pixelData >> 4);
+					}
+					if ((((pixelData & 0x08) != 0x08) && ((ix + 1) < (x + width))) || !useSkipBit) // Second Pixel
+					{
+						DRAW_PIX_FAST(ix + 1, iy, pixelData);
+					}
+				}
+			}
+		}
+	}
+}
+
 
 ///////////////////////////////////// TVout /////////////////////////////////////////
 bool TVout::init()
