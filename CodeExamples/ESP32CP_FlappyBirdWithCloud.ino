@@ -203,7 +203,7 @@ void game_loop()
 	while (1)
 	{
 		lcd.fillScr(BCKGRDCOL);
-		lcd.draw8bBitMap(70, 30, cloud, true);
+		lcd.draw8bBitMap(20, 30, cloud, true);
 
 		lcd.setColor(0, 0, 0);
 		lcd.drawHLine(0, GAMEH, TFTW);
