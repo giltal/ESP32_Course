@@ -161,10 +161,11 @@ void PCF8574::readBuffer(bool force){
 		DEBUG_PRINTLN("Read from buffer");
 		Wire.requestFrom(_address,(uint8_t)1);// Begin transmission to PCF8574 with the buttons
 		lastReadMillis = millis();
+		byte iInput;
 		if(Wire.available())   // If bytes are available to be recieved
 		{
 			  DEBUG_PRINTLN("Data ready");
-			  byte iInput = Wire.read();// Read a byte
+			  iInput = Wire.read();// Read a byte
 
 			  if ((iInput & readMode)>0){
 				  DEBUG_PRINT("Input ");
@@ -179,14 +180,24 @@ void PCF8574::readBuffer(bool force){
 		DEBUG_PRINT("Buffer value ");
 		DEBUG_PRINTLN(byteBuffered, BIN);
 
-		if ((bit(0) & readMode)>0) digitalInput.p0 = ((byteBuffered & bit(0))>0)?HIGH:LOW;
+		/*if ((bit(0) & readMode)>0) digitalInput.p0 = ((byteBuffered & bit(0))>0)?HIGH:LOW;
 		if ((bit(1) & readMode)>0) digitalInput.p1 = ((byteBuffered & bit(1))>0)?HIGH:LOW;
 		if ((bit(2) & readMode)>0) digitalInput.p2 = ((byteBuffered & bit(2))>0)?HIGH:LOW;
 		if ((bit(3) & readMode)>0) digitalInput.p3 = ((byteBuffered & bit(3))>0)?HIGH:LOW;
 		if ((bit(4) & readMode)>0) digitalInput.p4 = ((byteBuffered & bit(4))>0)?HIGH:LOW;
 		if ((bit(5) & readMode)>0) digitalInput.p5 = ((byteBuffered & bit(5))>0)?HIGH:LOW;
 		if ((bit(6) & readMode)>0) digitalInput.p6 = ((byteBuffered & bit(6))>0)?HIGH:LOW;
-		if ((bit(7) & readMode)>0) digitalInput.p7 = ((byteBuffered & bit(7))>0)?HIGH:LOW;
+		if ((bit(7) & readMode)>0) digitalInput.p7 = ((byteBuffered & bit(7))>0)?HIGH:LOW;*/
+
+		if ((bit(0) & readMode) > 0) digitalInput.p0 = ((iInput & bit(0)) > 0) ? HIGH : LOW;
+		if ((bit(1) & readMode) > 0) digitalInput.p1 = ((iInput & bit(1)) > 0) ? HIGH : LOW;
+		if ((bit(2) & readMode) > 0) digitalInput.p2 = ((iInput & bit(2)) > 0) ? HIGH : LOW;
+		if ((bit(3) & readMode) > 0) digitalInput.p3 = ((iInput & bit(3)) > 0) ? HIGH : LOW;
+		if ((bit(4) & readMode) > 0) digitalInput.p4 = ((iInput & bit(4)) > 0) ? HIGH : LOW;
+		if ((bit(5) & readMode) > 0) digitalInput.p5 = ((iInput & bit(5)) > 0) ? HIGH : LOW;
+		if ((bit(6) & readMode) > 0) digitalInput.p6 = ((iInput & bit(6)) > 0) ? HIGH : LOW;
+		if ((bit(7) & readMode) > 0) digitalInput.p7 = ((iInput & bit(7)) > 0) ? HIGH : LOW;
+
 
 		if ((readMode & byteBuffered)>0){
 			byteBuffered = ~readMode & byteBuffered;
@@ -289,32 +300,34 @@ uint8_t PCF8574::digitalRead(uint8_t pin){
 #else
 uint8_t PCF8574::digitalRead(uint8_t pin) {
 	uint8_t value = LOW;
-		Wire.requestFrom(_address, (uint8_t)1);// Begin transmission to PCF8574 with the buttons
-		lastReadMillis = millis();
-		if (Wire.available())   // If bytes are available to be recieved
-		{
-			DEBUG_PRINTLN("Data ready");
-			byte iInput = Wire.read();// Read a byte
+	Wire.requestFrom(_address, (uint8_t)1);// Begin transmission to PCF8574 with the buttons
+	lastReadMillis = millis();
+	if (Wire.available())   // If bytes are available to be recieved
+	{
+		DEBUG_PRINTLN("Data ready");
+		byte iInput = Wire.read();// Read a byte
 
-			if ((iInput & readMode) > 0) {
-				DEBUG_PRINT("Input ");
-				DEBUG_PRINTLN((byte)iInput, BIN);
+		if ((iInput & readMode) > 0) {
+			DEBUG_PRINT("Input ");
+			DEBUG_PRINTLN((byte)iInput, BIN);
 
-				byteBuffered = byteBuffered | (byte)iInput;
-				DEBUG_PRINT("byteBuffered ");
-				DEBUG_PRINTLN(byteBuffered, BIN);
+			byteBuffered = byteBuffered | (byte)iInput;
+			DEBUG_PRINT("byteBuffered ");
+			DEBUG_PRINTLN(byteBuffered, BIN);
 
-				if ((bit(pin) & byteBuffered) > 0) {
-					value = HIGH;
-				}
+			//if ((bit(pin) & byteBuffered) > 0) {
+			if ((bit(pin) & iInput) > 0)
+			{
+				value = HIGH;
 			}
 		}
-	if (value == HIGH) 
+	}
+	/*if (value == HIGH) 
 	{
 		byteBuffered = ~bit(pin) & byteBuffered;
 		DEBUG_PRINT("Buffer hight value readed set readed ");
 		DEBUG_PRINTLN(byteBuffered, BIN);
-	}
+	}*/
 	DEBUG_PRINT("Return value ");
 	DEBUG_PRINTLN(value);
 	return value;

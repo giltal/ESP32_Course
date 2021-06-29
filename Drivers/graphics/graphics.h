@@ -156,6 +156,7 @@ public:
 	void drawVLine(short x, short y, int l);
 	void flushFB();
 	void draw8bBitMap(short x, short y, const unsigned char * dataArray, bool useSkipBit, flipOption flipOpt = noflip);
+	void drawCompressed24bitBitmap(short x, short y, const unsigned int * dataArray);
 };
 
 /********** ILI9488 8/9 bit parallel **********/
@@ -504,9 +505,8 @@ public:
 	void setBackColor(unsigned char r, unsigned char g, unsigned char b){ _bgColor = rgb888TO444(r, g, b); _bgColorYUV = RGB2YUV[_bgColor];}
 	void fillScr(unsigned char r, unsigned char g, unsigned char b);
 	void sendFrame();
-	void drawCompressed24bitBitmap(short x, short y, const unsigned int * dataArray);
-	void drawCompressedGrayScaleBitmap(short x, short y, const unsigned short * dataArray, bool invert = false);
-	void debugFlushFrame();
+	//void drawCompressed24bitBitmap(short x, short y, const unsigned int * dataArray);
+	//void drawCompressedGrayScaleBitmap(short x, short y, const unsigned short * dataArray, bool invert = false);
 };
 
 #endif

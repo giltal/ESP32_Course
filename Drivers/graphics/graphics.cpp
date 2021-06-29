@@ -2241,6 +2241,43 @@ void ST77XX_FB::draw8bBitMap(short x, short y, const unsigned char * dataArray, 
 	}
 }
 
+void ST77XX_FB::drawCompressed24bitBitmap(short x, short y, const unsigned int * dataArray)
+{
+	unsigned int	hight, width;
+	unsigned int	buffer;
+	int				index = 0;
+	unsigned short  tempX = x,tempY = y;
+	unsigned char	r, g, b;
+
+	width = dataArray[index];
+	index++;
+
+	buffer = dataArray[index];
+	hight = buffer;
+	index++;
+
+	unsigned int dataArraySize = hight * width, i, j, counter = 0;
+	unsigned char copies;
+
+	for (i = DATA_START_OFFSET; counter < dataArraySize; i++)
+	{
+		buffer = dataArray[index];
+		index++;
+		copies = (buffer >> 24);
+		fg565 = rgbTo565((buffer & 0x000000ff), (buffer & 0x0000ffff) >> 8, (buffer & 0x00ffffff) >> 16);
+		for (int j = 0; j < copies; j++)
+		{
+			drawPixel(tempX, tempY);
+			tempX++;
+			if (tempX == (x + width))
+			{
+				tempY++;
+				tempX = x;
+			}
+		}
+		counter += copies;
+	}
+}
 
 ///////////////////////////////////// TVout /////////////////////////////////////////
 bool TVout::init()
@@ -2419,17 +2456,7 @@ void TVout::fillScr(unsigned char r, unsigned char g, unsigned char b)
 	}
 	_fgColor = temp;
 }
-void TVout::debugFlushFrame()
-{
-	for (size_t y = 0; y < 10; y++)
-	{
-		for (size_t i = 0; i < 32; i++)
-		{
-			printf("%x", workFrame[y][i]);
-		}
-		printf("\n");
-	}
-}
+
 void TVout::swapFrameBuffers()
 {
 	char **b = workFrame;
