@@ -105,9 +105,21 @@ class ST77XX : public graphics
 private:
 	unsigned short Xoffset, Yoffset;
 	ST77XXres _res;
+protected:
+	unsigned short colorTable[8];
+
 public:
 	ST77XX(ST77XXres res) : graphics(0,0)
 	{
+		colorTable[0] = rgbTo565(0, 0, 0);
+		colorTable[1] = rgbTo565(0, 0, 0xff);
+		colorTable[2] = rgbTo565(0, 0xff, 0);
+		colorTable[3] = rgbTo565(0, 0xff, 0xff);
+		colorTable[4] = rgbTo565(0xff, 0, 0);
+		colorTable[5] = rgbTo565(0xff, 0, 0xff);
+		colorTable[6] = rgbTo565(0xff, 0xff, 0);
+		colorTable[7] = rgbTo565(0xff, 0xff, 0xff);
+
 		_res = res;
 		if (res == _135x240)
 		{
@@ -139,6 +151,7 @@ public:
 	virtual void fillScr(unsigned char r, unsigned char g, unsigned char b);
 	virtual void drawHLine(short x, short y, int l);
 	virtual void drawVLine(short x, short y, int l);
+	void draw8bBitMap(short x, short y, const unsigned char * dataArray, bool useSkipBit, flipOption flipOpt = noflip);
 	void drawCompressed24bitBitmap(short x, short y, const unsigned int * dataArray);
 };
 
@@ -250,15 +263,14 @@ extern PCF8574 pcf8574;
 
 /* LCD Chip Select - Alwayes inserted */
 /* LCD and Touch pannel reset */
-#define ILI9488SPI_PRE_INIT() {\
+#define ILI9488SPI_PRE_INIT() \
 			pcf8574.pinMode(P0, OUTPUT);\ 
-			pcf8574.pinMode(P1, OUTPUT);\
-			pcf8574.begin();\
-			pcf8574.digitalWrite(P0, HIGH);\
-			pcf8574.digitalWrite(P1, HIGH);\
-			pinMode(ILI9488SPI_DATA_COMMAND_PIN, OUTPUT);\
-			}
-
+			pcf8574.pinMode(P1, OUTPUT); \
+			pcf8574.begin(); \
+			pcf8574.digitalWrite(P0, HIGH); \
+			pcf8574.digitalWrite(P1, HIGH); \
+			pinMode(ILI9488SPI_DATA_COMMAND_PIN, OUTPUT); 
+			
 #define	ILI9488SPI_RESET()\
 			pcf8574.digitalWrite(P1, HIGH);\
 			delay(250);\
@@ -362,7 +374,6 @@ public:
 	//int	 swapFrameBuffer();
 };
 
-
 // TV out via I2S DAC25 - SVIDEO format
 const unsigned short RGB2YUV[] = {
 32896, 32896, 37249, 37249, 41329, 41329, 45682, 45682, 49778, 50035, 54115, 54115, 58468, 58468, 62564, 62564, 33153, 33153, 37233, 37233, 37490, 41586, 41586, 45939, 45923, 50019, 50276, 54372, 54372, 58468, 58709, 62805, 29041, 33137, 33394, 37490, 37490, 41843, 41827, 41827, 46180, 46180, 50276, 50276, 54613, 54613, 58709, 58966, 29298, 29298, 33394, 33651, 37731, 37731, 42084, 42084, 46180, 46180, 46421, 50517, 50517, 54870, 54870, 58966,
@@ -439,6 +450,10 @@ private:
 	char **workFrame;
 	int _fgColorYUV,_bgColorYUV;
 	unsigned char _fgYUVc8;
+	
+	int _fgColorYUVarray[8];
+	unsigned char _fgYUVc8array[8];
+
 	///////////////// I2S related ////////////////
 #define lineSamples		854
 #define memSamples		856
@@ -505,8 +520,8 @@ public:
 	void setBackColor(unsigned char r, unsigned char g, unsigned char b){ _bgColor = rgb888TO444(r, g, b); _bgColorYUV = RGB2YUV[_bgColor];}
 	void fillScr(unsigned char r, unsigned char g, unsigned char b);
 	void sendFrame();
-	//void drawCompressed24bitBitmap(short x, short y, const unsigned int * dataArray);
-	//void drawCompressedGrayScaleBitmap(short x, short y, const unsigned short * dataArray, bool invert = false);
+	void draw8bBitMap(short x, short y, const unsigned char * dataArray, bool useSkipBit, flipOption flipOpt = noflip);
+	void drawCompressed24bitBitmap(short x, short y, const unsigned int * dataArray);
 };
 
 #endif

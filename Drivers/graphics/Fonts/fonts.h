@@ -27,7 +27,9 @@ enum fontType
 	ORBITRON_LIGHT32,
 	MONO_BOLD18,
 	OBLIQUE18,
-	SANS_OBLIQUE56
+	SANS_OBLIQUE56,
+	SANS9,
+	PICO6
 };
 
 extern customFont orbitronLight32Font;
@@ -35,5 +37,7 @@ extern customFont orbitronLight24Font;
 extern customFont monoBold18Font;
 extern customFont oblique18Font;
 extern customFont sansOblique56Font;
+extern customFont sans9Font;
+extern customFont pico6Font;
 
 #endif // FONTS_H

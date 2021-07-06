@@ -4,3 +4,5 @@
 #include "Fonts/monoBold18.h"
 #include "Fonts/oblique18.h"
 #include "Fonts/sansOblique56.h"
+#include "Fonts/sans9.h"
+#include "Fonts/Pico6.h"

@@ -410,6 +410,12 @@ void graphics::loadFonts(fontType fontsToLoad)
 	case SANS_OBLIQUE56:
 		currentFonts = &sansOblique56Font;
 		break;
+	case SANS9:
+		currentFonts = &sans9Font;
+		break;
+	case PICO6:
+		currentFonts = &pico6Font;
+		break;
 	default:
 		currentFonts = &orbitronLight24Font;
 		break;
@@ -2036,6 +2042,95 @@ void ST77XX::drawVLine(short x, short y, int l)
 	SPI.writeShort(fg565, l);
 }
 
+#define DRAW_PIX_8BIT(X,Y,PIX_DATA)\
+		if (X < maxX && Y < maxY) {\
+			setXY(X, Y);\
+			ST77XXSPI_LCD_WRITE_DATA(colorTable[(PIX_DATA) & 0x7]);\
+		}
+
+void ST77XX::draw8bBitMap(short x, short y, const unsigned char * dataArray, bool useSkipBit, flipOption flipOpt)
+{
+	unsigned char pixelData;
+	unsigned short width, hight;
+	unsigned int index = 4, size;
+	width = (dataArray[0] << 8) | dataArray[1];
+	hight = (dataArray[2] << 8) | dataArray[3];
+	size = (width / 2 + (width & 01 == 1)) * hight;
+
+	if (flipOpt == flipY || flipOpt == flipXY)
+	{
+		for (int iy = (y + hight - 1); iy >= y; iy--)
+		{
+			if (flipOpt == flipX || flipOpt == flipXY)
+			{
+				for (int ix = (x + width - 1); ix >= x; ix -= 2)
+				{
+					pixelData = dataArray[index++];
+					if (((pixelData & 0x80) != 0x80) || !useSkipBit) // First pixel
+					{
+						DRAW_PIX_8BIT(ix, iy, pixelData >> 4);
+					}
+					if (((pixelData & 0x08) != 0x08) && (ix < (x + width)) || !useSkipBit) // Second Pixel
+					{
+						DRAW_PIX_8BIT(ix - 1, iy, pixelData);
+					}
+				}
+			}
+			else
+			{
+				for (int ix = x; ix < (x + width); ix += 2)
+				{
+					pixelData = dataArray[index++];
+					if (((pixelData & 0x80) != 0x80) || !useSkipBit) // First pixel
+					{
+						DRAW_PIX_8BIT(ix, iy, pixelData >> 4);
+					}
+					if ((((pixelData & 0x08) != 0x08) && ((ix + 1) < (x + width))) || !useSkipBit) // Second Pixel
+					{
+						DRAW_PIX_8BIT(ix + 1, iy, pixelData);
+					}
+				}
+			}
+		}
+	}
+	else
+	{
+		for (int iy = y; iy < (y + hight); iy++)
+		{
+			if (flipOpt == flipX || flipOpt == flipXY)
+			{
+				for (int ix = (x + width - 1); ix >= x; ix -= 2)
+				{
+					pixelData = dataArray[index++];
+					if (((pixelData & 0x80) != 0x80) || !useSkipBit) // First pixel
+					{
+						DRAW_PIX_8BIT(ix, iy, pixelData >> 4);
+					}
+					if (((pixelData & 0x08) != 0x08) && (ix < (x + width)) || !useSkipBit) // Second Pixel
+					{
+						DRAW_PIX_8BIT(ix - 1, iy, pixelData);
+					}
+				}
+			}
+			else
+			{
+				for (int ix = x; ix < (x + width); ix += 2)
+				{
+					pixelData = dataArray[index++];
+					if (((pixelData & 0x80) != 0x80) || !useSkipBit) // First pixel
+					{
+						DRAW_PIX_8BIT(ix, iy, pixelData >> 4);
+					}
+					if ((((pixelData & 0x08) != 0x08) && ((ix + 1) < (x + width))) || !useSkipBit) // Second Pixel
+					{
+						DRAW_PIX_8BIT(ix + 1, iy, pixelData);
+					}
+				}
+			}
+		}
+	}
+}
+
 void ST77XX::drawCompressed24bitBitmap(short x, short y, const unsigned int * dataArray)
 {
 	unsigned int	hight, width;
@@ -2150,16 +2245,6 @@ void ST77XX_FB::drawVLine(short x, short y, int l)
 
 void ST77XX_FB::draw8bBitMap(short x, short y, const unsigned char * dataArray, bool useSkipBit, flipOption flipOpt)
 {
-	static unsigned short colorTable[8];
-	colorTable[0] = rgbTo565(0, 0, 0);
-	colorTable[1] = rgbTo565(0, 0, 0xff);
-	colorTable[2] = rgbTo565(0, 0xff, 0);
-	colorTable[3] = rgbTo565(0, 0xff, 0xff);
-	colorTable[4] = rgbTo565(0xff, 0, 0);
-	colorTable[5] = rgbTo565(0xff, 0, 0xff);
-	colorTable[6] = rgbTo565(0xff, 0xff, 0);
-	colorTable[7] = rgbTo565(0xff, 0xff, 0xff);
-
 	unsigned char pixelData;
 	unsigned short width, hight;
 	unsigned int index = 4, size;
@@ -2314,6 +2399,41 @@ bool TVout::init()
 		}
 		return false;
 	}
+	
+	// 8 bit bitmap color table
+	int tempColor;
+	tempColor = rgb888TO444(0, 0, 0);
+	_fgColorYUVarray[0] = RGB2YUV[tempColor];
+	_fgYUVc8array[0] = _fgColorYUVarray[0] >> 8;
+
+	tempColor = rgb888TO444(0, 0, 255);
+	_fgColorYUVarray[1] = RGB2YUV[tempColor];
+	_fgYUVc8array[1] = _fgColorYUVarray[1] >> 8;
+
+	tempColor = rgb888TO444(0, 255, 0);
+	_fgColorYUVarray[2] = RGB2YUV[tempColor];
+	_fgYUVc8array[2] = _fgColorYUVarray[2] >> 8;
+
+	tempColor = rgb888TO444(0, 255, 255);
+	_fgColorYUVarray[3] = RGB2YUV[tempColor];
+	_fgYUVc8array[3] = _fgColorYUVarray[3] >> 8;
+
+	tempColor = rgb888TO444(255, 0, 0);
+	_fgColorYUVarray[4] = RGB2YUV[tempColor];
+	_fgYUVc8array[4] = _fgColorYUVarray[4] >> 8;
+
+	tempColor = rgb888TO444(255, 0, 255);
+	_fgColorYUVarray[5] = RGB2YUV[tempColor];
+	_fgYUVc8array[5] = _fgColorYUVarray[5] >> 8;
+
+	tempColor = rgb888TO444(255, 255, 0);
+	_fgColorYUVarray[6] = RGB2YUV[tempColor];
+	_fgYUVc8array[6] = _fgColorYUVarray[6] >> 8;
+
+	tempColor = rgb888TO444(255, 255, 255);
+	_fgColorYUVarray[7] = RGB2YUV[tempColor];
+	_fgYUVc8array[7] = _fgColorYUVarray[7] >> 8;
+
 	
 	//////////// I2S Related /////////////
 
@@ -2510,4 +2630,150 @@ void TVout::sendFrame()
 		sendLine(blank);
 	for (int i = 0; i < 3; i++)
 		sendLine(shortSync);
+}
+
+void TVout::drawCompressed24bitBitmap(short x, short y, const unsigned int * dataArray)
+{
+	unsigned int	hight, width;
+	unsigned int	buffer;
+	int				index = 0;
+	unsigned short  tempX = x, tempY = y;
+	unsigned char	r, g, b;
+
+	width = dataArray[index];
+	index++;
+
+	buffer = dataArray[index];
+	hight = buffer;
+	index++;
+
+	unsigned int dataArraySize = hight * width, i, j, counter = 0;
+	unsigned char copies;
+
+	for (i = DATA_START_OFFSET; counter < dataArraySize; i++)
+	{
+		buffer = dataArray[index];
+		index++;
+		copies = (buffer >> 24);
+		setColor((buffer & 0x000000ff), (buffer & 0x0000ffff) >> 8, (buffer & 0x00ffffff) >> 16);
+		for (int j = 0; j < copies; j++)
+		{
+			drawPixel(tempX, tempY);
+			tempX++;
+			if (tempX == (x + width))
+			{
+				tempY++;
+				tempX = x;
+			}
+		}
+		counter += copies;
+	}
+}
+/*
+if (y & 1)
+{
+	workFrame[y & ~1][x] = (workFrame[y & ~1][x] & 0xf) | (_fgColorYUV & 0xf0);
+	workFrame[y][x] = _fgYUVc8;
+}
+else
+{
+	workFrame[y][x] = _fgColorYUV;
+	workFrame[y | 1][x] = (workFrame[y | 1][x] & 0xf) | ((_fgYUVc8) & 0xf0);
+}
+*/
+#define TV_DRAW_PIX_8BIT(X,Y,PIX_DATA)\
+		if (X < maxX && Y < maxY) {\
+			if (Y & 1)\
+			{\
+				workFrame[Y & ~1][X] = (workFrame[Y & ~1][X] & 0xf) | (_fgColorYUVarray[(PIX_DATA) & 0x7] & 0xf0);\
+				workFrame[Y][X] = _fgYUVc8array[(PIX_DATA) & 0x7];\
+			}\
+			else\
+			{\
+				workFrame[Y][X] = _fgColorYUVarray[(PIX_DATA) & 0x7];\
+				workFrame[Y | 1][X] = (workFrame[Y | 1][X] & 0xf) | ((_fgYUVc8array[(PIX_DATA) & 0x7]) & 0xf0);\
+			}\
+		}
+
+void TVout::draw8bBitMap(short x, short y, const unsigned char * dataArray, bool useSkipBit, flipOption flipOpt)
+{
+	unsigned char pixelData;
+	unsigned short width, hight;
+	unsigned int index = 4, size;
+	width = (dataArray[0] << 8) | dataArray[1];
+	hight = (dataArray[2] << 8) | dataArray[3];
+	size = (width / 2 + (width & 01 == 1)) * hight;
+
+	if (flipOpt == flipY || flipOpt == flipXY)
+	{
+		for (int iy = (y + hight - 1); iy >= y; iy--)
+		{
+			if (flipOpt == flipX || flipOpt == flipXY)
+			{
+				for (int ix = (x + width - 1); ix >= x; ix -= 2)
+				{
+					pixelData = dataArray[index++];
+					if (((pixelData & 0x80) != 0x80) || !useSkipBit) // First pixel
+					{
+						TV_DRAW_PIX_8BIT(ix, iy, pixelData >> 4);
+					}
+					if (((pixelData & 0x08) != 0x08) && (ix < (x + width)) || !useSkipBit) // Second Pixel
+					{
+						TV_DRAW_PIX_8BIT(ix - 1, iy, pixelData);
+					}
+				}
+			}
+			else
+			{
+				for (int ix = x; ix < (x + width); ix += 2)
+				{
+					pixelData = dataArray[index++];
+					if (((pixelData & 0x80) != 0x80) || !useSkipBit) // First pixel
+					{
+						TV_DRAW_PIX_8BIT(ix, iy, pixelData >> 4);
+					}
+					if ((((pixelData & 0x08) != 0x08) && ((ix + 1) < (x + width))) || !useSkipBit) // Second Pixel
+					{
+						TV_DRAW_PIX_8BIT(ix + 1, iy, pixelData);
+					}
+				}
+			}
+		}
+	}
+	else
+	{
+		for (int iy = y; iy < (y + hight); iy++)
+		{
+			if (flipOpt == flipX || flipOpt == flipXY)
+			{
+				for (int ix = (x + width - 1); ix >= x; ix -= 2)
+				{
+					pixelData = dataArray[index++];
+					if (((pixelData & 0x80) != 0x80) || !useSkipBit) // First pixel
+					{
+						TV_DRAW_PIX_8BIT(ix, iy, pixelData >> 4);
+					}
+					if (((pixelData & 0x08) != 0x08) && (ix < (x + width)) || !useSkipBit) // Second Pixel
+					{
+						TV_DRAW_PIX_8BIT(ix - 1, iy, pixelData);
+					}
+				}
+			}
+			else
+			{
+				for (int ix = x; ix < (x + width); ix += 2)
+				{
+					pixelData = dataArray[index++];
+					if (((pixelData & 0x80) != 0x80) || !useSkipBit) // First pixel
+					{
+						TV_DRAW_PIX_8BIT(ix, iy, pixelData >> 4);
+					}
+					if ((((pixelData & 0x08) != 0x08) && ((ix + 1) < (x + width))) || !useSkipBit) // Second Pixel
+					{
+						TV_DRAW_PIX_8BIT(ix + 1, iy, pixelData);
+					}
+				}
+			}
+		}
+	}
 }
