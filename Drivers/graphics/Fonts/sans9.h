@@ -197,6 +197,6 @@ static const fontInfo Sans9Info[] PROGMEM = {
     {1138, 4, 17, 6, 1, -12},  // 0x7D '}'
     {1147, 7, 3, 9, 1, -7}};   // 0x7E '~'
 
-customFont sans9Font = { Sans9 , Sans9Info, 0x20, 0x7E, 22};
+customFont sans9Font = { Sans9 , Sans9Info, 0x20, 0x7E, 9};
 #endif // SANS_9
 // Approx. 1822 bytes
