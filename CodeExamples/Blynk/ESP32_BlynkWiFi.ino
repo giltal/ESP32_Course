@@ -122,7 +122,7 @@ void loop()
 	unsigned short x, y;
 	Blynk.run();
 	lcd.fillScr(255, 255, 255);
-	lcd.setColor(virtualPinR, virtualPinG, virtualPinB);
+	lcd.setColor(virtualPinR * 255, virtualPinG * 255, virtualPinB * 255);
 	x = map(virtualJoyX, 0, 1023, 15, 225);
 	y = map(virtualJoyY, 0, 1023, 120, 15);
 	lcd.drawCircle(x ,y , 14, true);
