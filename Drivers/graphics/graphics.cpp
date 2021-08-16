@@ -541,11 +541,11 @@ void ILI9488_9BIT_PARALLEL::init(bool _9bit)
 	ILI9488P_WR_CMD(0x3A);      // Interface Pixel Format
 	if (_9bit)
 	{
-		ILI9488P_WR_DATA8(0x66); 	  // 0x66 = 18 bits (3 bytes per pixel), 0x55 = 16 bits
+		ILI9488P_WR_DATA8(0x66); 	  // 0x66 = 18 bits , 0x55 = 16 bits
 	}
 	else
 	{
-		ILI9488P_WR_DATA8(0x55); 	  // 0x66 = 18 bits (3 bytes per pixel), 0x55 = 16 bits  
+		ILI9488P_WR_DATA8(0x55); 	  // 0x66 = 18 bits , 0x55 = 16 bits  
 	}
 	ILI9488P_WR_CMD(0XB0);      // Interface Mode Control
 	ILI9488P_WR_DATA8(0x80);     //SDO NOT USE
@@ -872,7 +872,8 @@ bool ILI9488_9BIT_PARALLEL::initI2Sparallel(I2Ssetup * i2sSetup)
 		periph_module_enable(PERIPH_I2S0_MODULE);
 		iomux_clock = I2S0O_WS_OUT_IDX;
 		irq_source = ETS_I2S0_INTR_SOURCE;
-		iomux_signal_base = I2S0O_DATA_OUT8_IDX;
+		//iomux_signal_base = I2S0O_DATA_OUT8_IDX;
+		iomux_signal_base = I2S0O_DATA_OUT0_IDX;
 	}
 	else 
 	{
@@ -2365,6 +2366,7 @@ void ST77XX_FB::drawCompressed24bitBitmap(short x, short y, const unsigned int *
 }
 
 ///////////////////////////////////// TVout /////////////////////////////////////////
+#if 0
 bool TVout::init()
 {
 	bool error = false;
@@ -2584,8 +2586,17 @@ void TVout::swapFrameBuffers()
 	displayFrame = b;
 }
 
-void TVout::sendFrame()
+void TVout::sendFrame(bool onlyWorkFrame)
 {
+	char **frameToDisplay;
+	if (onlyWorkFrame)
+	{
+		frameToDisplay = workFrame;
+	}
+	else
+	{
+		frameToDisplay = displayFrame;
+	}
 	int l = 0;
 	//long sync
 	for (int i = 0; i < 3; i++)
@@ -2600,8 +2611,8 @@ void TVout::sendFrame()
 	//image
 	for (int i = 0; i < 240; i += 2)
 	{
-		char *pixels0 = displayFrame[i];
-		char *pixels1 = displayFrame[i + 1];
+		char *pixels0 = frameToDisplay[i];
+		char *pixels1 = frameToDisplay[i + 1];
 		int j = frameStart;
 		for (int x = 0; x < imageSamples; x += 2)
 		{
@@ -2630,6 +2641,10 @@ void TVout::sendFrame()
 		sendLine(blank);
 	for (int i = 0; i < 3; i++)
 		sendLine(shortSync);
+}
+unsigned int TVout::getPixel(short x, short y)
+{
+	return workFrame[y][x];
 }
 
 void TVout::drawCompressed24bitBitmap(short x, short y, const unsigned int * dataArray)
@@ -2669,18 +2684,7 @@ void TVout::drawCompressed24bitBitmap(short x, short y, const unsigned int * dat
 		counter += copies;
 	}
 }
-/*
-if (y & 1)
-{
-	workFrame[y & ~1][x] = (workFrame[y & ~1][x] & 0xf) | (_fgColorYUV & 0xf0);
-	workFrame[y][x] = _fgYUVc8;
-}
-else
-{
-	workFrame[y][x] = _fgColorYUV;
-	workFrame[y | 1][x] = (workFrame[y | 1][x] & 0xf) | ((_fgYUVc8) & 0xf0);
-}
-*/
+
 #define TV_DRAW_PIX_8BIT(X,Y,PIX_DATA)\
 		if (X < maxX && Y < maxY) {\
 			if (Y & 1)\
@@ -2777,3 +2781,612 @@ void TVout::draw8bBitMap(short x, short y, const unsigned char * dataArray, bool
 		}
 	}
 }
+#endif
+
+#include "videoOut.h"
+void TVout::fifo_reset(i2s_dev_t * dev)
+{
+	dev->conf.rx_fifo_reset = 1;
+	//  while(dev->state.rx_fifo_reset_back);
+	dev->conf.rx_fifo_reset = 0;
+	dev->conf.tx_fifo_reset = 1;
+	// while(dev->state.tx_fifo_reset_back);
+	dev->conf.tx_fifo_reset = 0;
+}
+
+void TVout::dev_reset(i2s_dev_t * dev)
+{
+	unsigned int lcConf = *((volatile unsigned char *)(((i2sRegBase + 0x60))));
+	unsigned int conf = *((volatile unsigned char *)(((i2sRegBase + 0x8))));
+	// do rmw
+	(*((volatile unsigned char *)(((i2sRegBase + 0x8)))) = conf | 0x5);
+	(*((volatile unsigned char *)(((i2sRegBase + 0x8)))) = conf);
+	(*((volatile unsigned char *)(((i2sRegBase + 0x60)))) = lcConf | 0x3);
+	(*((volatile unsigned char *)(((i2sRegBase + 0x60)))) = lcConf);
+}
+
+bool TVout::init(bool doubleBuffer, bool par9488, I2Ssetup * i2sSetup)
+{
+	if (par9488) // Init the 9488
+	{
+		_par9488 = true;
+		_maxX = maxX;
+		_maxY = maxY;
+		_line_count = 0;
+		
+		// Setup the pinout
+		pinMode(0, OUTPUT); // D/C
+		//pinMode(2, OUTPUT); // WR/CLK
+		pinMode(i2sSetup->clockPin, OUTPUT);
+		for (size_t pin = 0; pin < 8; pin++)
+		{
+			pinMode(i2sSetup->dataPins[pin], OUTPUT);
+		}
+		// Data 0-7
+		//pinMode(4, OUTPUT); // D0
+		//pinMode(5, OUTPUT); // 1
+		//pinMode(12, OUTPUT);// 2
+		//pinMode(13, OUTPUT);// 3
+		//pinMode(14, OUTPUT);// 4
+		//pinMode(15, OUTPUT);// 5
+		//pinMode(18, OUTPUT);// 6
+		//pinMode(19, OUTPUT);// 7
+
+		ILI9488SPI_PRE_INIT();
+		ILI9488SPI_RESET();
+		ILI9488SPI_ASSERT_CS();
+
+		ILI9488P_WR_CMD(0xE0);
+		ILI9488P_WR_DATA8(0x00);
+		ILI9488P_WR_DATA8(0x03);
+		ILI9488P_WR_DATA8(0x09);
+		ILI9488P_WR_DATA8(0x08);
+		ILI9488P_WR_DATA8(0x16);
+		ILI9488P_WR_DATA8(0x0A);
+		ILI9488P_WR_DATA8(0x3F);
+		ILI9488P_WR_DATA8(0x78);
+		ILI9488P_WR_DATA8(0x4C);
+		ILI9488P_WR_DATA8(0x09);
+		ILI9488P_WR_DATA8(0x0A);
+		ILI9488P_WR_DATA8(0x08);
+		ILI9488P_WR_DATA8(0x16);
+		ILI9488P_WR_DATA8(0x1A);
+		ILI9488P_WR_DATA8(0x0F);
+
+		ILI9488P_WR_CMD(0XE1);
+		ILI9488P_WR_DATA8(0x00);
+		ILI9488P_WR_DATA8(0x16);
+		ILI9488P_WR_DATA8(0x19);
+		ILI9488P_WR_DATA8(0x03);
+		ILI9488P_WR_DATA8(0x0F);
+		ILI9488P_WR_DATA8(0x05);
+		ILI9488P_WR_DATA8(0x32);
+		ILI9488P_WR_DATA8(0x45);
+		ILI9488P_WR_DATA8(0x46);
+		ILI9488P_WR_DATA8(0x04);
+		ILI9488P_WR_DATA8(0x0E);
+		ILI9488P_WR_DATA8(0x0D);
+		ILI9488P_WR_DATA8(0x35);
+		ILI9488P_WR_DATA8(0x37);
+		ILI9488P_WR_DATA8(0x0F);
+
+		ILI9488P_WR_CMD(0XC0);     //Power Control 1
+		ILI9488P_WR_DATA8(0x17);    //Vreg1out
+		ILI9488P_WR_DATA8(0x15);    //Verg2out
+
+		ILI9488P_WR_CMD(0xC1);     //Power Control 2
+		ILI9488P_WR_DATA8(0x41);    //VGH,VGL
+
+		ILI9488P_WR_CMD(0xC5);     //Power Control 3
+		ILI9488P_WR_DATA8(0x00);
+		ILI9488P_WR_DATA8(0x12);    //Vcom
+		ILI9488P_WR_DATA8(0x80);
+
+		ILI9488P_WR_CMD(0x36);      //Memory Access
+		//ILI9488P_WR_DATA8(0x4A);
+								 ////76543210
+		ILI9488P_WR_DATA8(0b11101010);
+
+		ILI9488P_WR_CMD(0x3A);      // Interface Pixel Format
+
+		ILI9488P_WR_DATA8(0x55); 	  // 0x66 = 18 bits , 0x55 = 16 bits  
+
+		ILI9488P_WR_CMD(0XB0);      // Interface Mode Control
+		ILI9488P_WR_DATA8(0x80);     //SDO NOT USE
+
+		ILI9488P_WR_CMD(0xB1);      //Frame rate
+		ILI9488P_WR_DATA8(0xA0);    //60Hz
+
+		ILI9488P_WR_CMD(0xB4);      //Display Inversion Control
+		ILI9488P_WR_DATA8(0x02);    //2-dot
+
+		ILI9488P_WR_CMD(0XB6);     //Display Function Control  RGB/MCU Interface Control
+
+		ILI9488P_WR_DATA8(0x02);    //MCU
+		ILI9488P_WR_DATA8(0x02);    //Source,Gate scan direction
+
+		ILI9488P_WR_CMD(0XE9);     // Set Image Function
+		ILI9488P_WR_DATA8(0x00);    // Disable 24 bit data
+
+		ILI9488P_WR_CMD(0xF7);      // Adjust Control
+		ILI9488P_WR_DATA8(0xA9);
+		ILI9488P_WR_DATA8(0x51);
+		ILI9488P_WR_DATA8(0x2C);
+		ILI9488P_WR_DATA8(0x82);    // D7 stream, loose
+
+		ILI9488P_WR_CMD(0x11);    //Exit Sleep
+		delay(120);
+		ILI9488P_WR_CMD(0x29);    //Display on
+
+		// Set the work arae
+		unsigned short x1 = 0 + 10, y1 = 0 + 10, x2 = maxX - 1 + 10, y2 = maxY - 1 + 10;
+		ILI9488P_WR_CMD(0x2a);
+		ILI9488P_WR_DATA8(x1 >> 8);
+		ILI9488P_WR_DATA8(x1);
+		ILI9488P_WR_DATA8(x2 >> 8);
+		ILI9488P_WR_DATA8(x2);
+		ILI9488P_WR_CMD(0x2b);
+		ILI9488P_WR_DATA8(y1 >> 8);
+		ILI9488P_WR_DATA8(y1);
+		ILI9488P_WR_DATA8(y2 >> 8);
+		ILI9488P_WR_DATA8(y2);
+		ILI9488P_WR_CMD(0x2b);
+		ILI9488P_WR_CMD(0x2c);
+
+		// Init the I2S part
+		if (i2sSetup->port == 0)
+		{
+			port = I2S_NUM_0;
+			i2sRegBase = I2S0_REG_BASE;
+		}
+		else
+		{
+			port = I2S_NUM_1;
+			i2sRegBase = I2S1_REG_BASE;
+		}
+		dev = I2S[port];
+		_dev = dev;
+		int irq_source;
+		// Initialize I2S peripheral
+		if (port == I2S_NUM_0)
+		{
+			periph_module_reset(PERIPH_I2S0_MODULE);
+			periph_module_enable(PERIPH_I2S0_MODULE);
+			iomux_clock = I2S0O_WS_OUT_IDX;
+			irq_source = ETS_I2S0_INTR_SOURCE;
+			iomux_signal_base = I2S0O_DATA_OUT0_IDX;
+		}
+		else
+		{
+			periph_module_reset(PERIPH_I2S1_MODULE);
+			periph_module_enable(PERIPH_I2S1_MODULE);
+			iomux_clock = I2S1O_WS_OUT_IDX;
+			irq_source = ETS_I2S1_INTR_SOURCE;
+			iomux_signal_base = I2S1O_DATA_OUT0_IDX;
+		}
+
+		// Setup GPIOs
+		for (int i = 0; i < 8; i++)
+		{
+			pinMode(i2sSetup->dataPins[i], OUTPUT);
+			gpio_matrix_out(i2sSetup->dataPins[i], iomux_signal_base + i, false, false);
+			pinList[i] = i2sSetup->dataPins[i];
+		}
+
+		gpio_matrix_out(i2sSetup->clockPin, iomux_clock, true, false);
+		pinList[8] = i2sSetup->clockPin;
+
+		// Setup I2S peripheral
+		dev_reset(dev);
+
+		// Set i2s mode to LCD mode
+		dev->conf2.val = 0;
+		dev->conf2.lcd_en = 1;
+		dev->conf2.lcd_tx_wrx2_en = 1; // Gil
+		dev->conf2.lcd_tx_sdx2_en = 0; // Gil
+		dev->conf.tx_slave_mod = 0;
+
+		// Setup i2s clock
+		dev->sample_rate_conf.val = 0;
+		// Third stage config, width of data to be written to IO (I think this should always be the actual data width?)
+		dev->sample_rate_conf.rx_bits_mod = 16;// bus_width;
+		dev->sample_rate_conf.tx_bits_mod = 16;// bus_width;
+		dev->sample_rate_conf.rx_bck_div_num = 2;
+		dev->sample_rate_conf.tx_bck_div_num = 2;
+
+		dev->clkm_conf.clka_en = 0;
+		dev->clkm_conf.clkm_div_a = 64;
+		dev->clkm_conf.clkm_div_b = 1;
+		dev->clkm_conf.clkm_div_num = i2sSetup->freq;// 6 (12.5MHz) - stable with no link list; // 8 = 10MHz (This is the only stable frequency) 4 = 20MHz, 2 = 40 MHz
+
+		// Some fifo conf I don't quite understand 
+		dev->fifo_conf.val = 0;
+		// Dictated by datasheet
+		dev->fifo_conf.rx_fifo_mod_force_en = 1;
+		dev->fifo_conf.tx_fifo_mod_force_en = 1;
+		// Not really described for non-pcm modes, although datasheet states it should be set correctly even for LCD mode
+		// First stage config. Configures how data is loaded into fifo
+		dev->fifo_conf.tx_fifo_mod = 1;
+		// Probably relevant for buffering from the DMA controller
+		dev->fifo_conf.rx_data_num = 0; //Thresholds. 
+		dev->fifo_conf.tx_data_num = 0;
+		// Enable DMA support
+		dev->fifo_conf.dscr_en = 1;
+
+		dev->conf1.val = 0;
+		dev->conf1.tx_stop_en = 1;
+
+		dev->conf1.tx_pcm_bypass = 1;
+
+		// Second stage config
+		// dev->conf_chan.val = 0;
+		// Tx in mono mode, read 32 bit per sample from fifo
+
+		dev->conf.tx_mono = 1; // Gil
+		//dev->conf.tx_msb_right = 1; // Gil - Table 59 in I2S spec
+
+		dev->conf_chan.tx_chan_mod = 1;
+		dev->conf_chan.rx_chan_mod = 1;
+
+		dev->conf.tx_right_first = 0; //????
+		dev->conf.rx_right_first = 0;
+
+		dev->lc_conf.out_eof_mode = 1;
+		dev->lc_conf.check_owner = 0;
+		//dev->lc_conf.out_auto_wrback = 1;
+
+		dev->timing.val = 0;
+
+		I2S1.int_ena.out_eof = 1;
+	}
+	
+	doubleBufferOn = doubleBuffer;
+	par9488set = par9488;
+
+	if (!video_init(doubleBuffer, par9488))
+		return false;
+	if (doubleBuffer)
+	{
+		displayFrame = _Frame1lines;
+	}
+	else
+	{
+		displayFrame = _Frame0lines;
+	}
+
+	generateRGB323palette();
+
+	return true;
+}
+
+void TVout::dmaI2S()
+{
+	dev->out_link.stop = 1;
+	dev->out_link.start = 0;
+	dev->conf.tx_start = 0;
+	dev_reset(dev);
+
+	// Configure DMA burst mode
+	dev->lc_conf.val = I2S_OUT_DATA_BURST_EN | I2S_OUTDSCR_BURST_EN;
+	// Set address of DMA descriptor
+	dev->out_link.addr = (uint32_t)_dma_desc;
+	// Start DMA operation
+	dev->out_link.start = 1;
+	dev->conf.tx_start = 1;
+}
+
+void TVout::swapFrameBuffers()
+{
+	if (doubleBufferOn)
+	{
+		if (displayFrame == _Frame0lines)
+		{
+			displayFrame = _Frame1lines;
+			_lines = _Frame0lines;
+		}
+		else
+		{
+			displayFrame = _Frame0lines;
+			_lines = _Frame1lines;
+		}
+	}
+}
+
+void TVout::fillScr(unsigned char index)
+{
+	unsigned int val = (index << 24) | (index << 16) | (index << 8) | index;
+	unsigned int * tempPtr;
+	for (size_t y = 0; y < maxY; y++)
+	{
+		tempPtr = (unsigned int *)displayFrame[y];
+		for (size_t x = 0; x < maxX/4; x++)
+		{
+			tempPtr[x] = val;
+		}
+	}
+}
+
+void TVout::fillScr(unsigned char r, unsigned char g, unsigned char b)
+{
+	unsigned char index = computeIndex(r, g, b); //((r >> 5) << 5) | ((g >> 6) << 3) | (b >> 5);
+	fillScr(index);
+}
+
+void TVout::drawPixel(short x, short y)
+{
+	if (x < maxX && y < maxY)
+	{
+		displayFrame[y][x] = paletteIndex;
+	}
+}
+
+void TVout::setPaletteIndex(unsigned char index)
+{
+	paletteIndex = index;
+}
+
+void TVout::drawHLine(short x, short y, int l)
+{
+	unsigned int fixedL, i;
+	if (x + l >= maxX)
+	{
+		fixedL = maxX;
+	}
+	else
+		fixedL = (x + l);
+
+	for (i = x; i < fixedL; i++)
+	{
+		displayFrame[y][i] = paletteIndex;
+	}
+}
+
+void TVout::drawVLine(short x, short y, int l)
+{
+	unsigned int fixedL, i;
+	if (y + l >= maxY)
+	{
+		fixedL = maxY;
+	}
+	else
+		fixedL = (y + l);
+
+	for (i = y; i < fixedL; i++)
+	{
+		displayFrame[i][x] = paletteIndex;
+	}
+}
+
+void TVout::updatePalette(unsigned char index, unsigned char r, unsigned char g, unsigned char b)
+{
+	if (!par9488set)
+	{
+		float chroma_scale = BLANKING_LEVEL / 2 / 256;
+		//chroma_scale /= 127;  // looks a little washed out
+		chroma_scale /= 80;
+
+		float y = 0.299 * r + 0.587*g + 0.114 * b;
+		float u = -0.147407 * r - 0.289391 * g + 0.436798 * b;
+		float v = 0.614777 * r - 0.514799 * g - 0.099978 * b;
+		y /= 255.0;
+		y = (y*(WHITE_LEVEL - BLACK_LEVEL) + BLACK_LEVEL) / 256;
+
+		uint32_t e = 0;
+		uint32_t o = 0;
+		for (int i = 0; i < 4; i++)
+		{
+			float p = 2 * M_PI*i / 4 + M_PI;
+			float s = sin(p)*chroma_scale;
+			float c = cos(p)*chroma_scale;
+			uint8_t e0 = round(y + (s*u) + (c*v));
+			uint8_t o0 = round(y + (s*u) - (c*v));
+			e = (e << 8) | e0;
+			o = (o << 8) | o0;
+		}
+		_palette[index] = e; //even
+		_palette[index + 256] = o; //odd
+	}
+}
+
+void TVout::updatePalette(unsigned char index, unsigned short val)
+{
+	if (par9488set)
+	{
+		_palette16[index] = val;
+	}
+}
+
+unsigned char TVout::getIndex(short x, short y)
+{
+	return displayFrame[y][x];
+}
+
+unsigned char redTable[8] = { 0,4,8,16,32,64,128,255 };
+unsigned char greenTable[4] = { 0,64,128,255 };
+unsigned char blueTable[8] = { 0,4,8,16,32,64,128,255 };
+
+void TVout::generateRGB323palette()
+{
+	// 8 bit RGB R3 G2 B3
+	unsigned int index = 0;
+	if (!par9488set)
+	{
+		for (size_t r = 0; r < 8; r++)
+		{
+			for (size_t g = 0; g < 4; g++)
+			{
+				for (size_t b = 0; b < 8; b++)
+				{
+					//updatePalette((r << 5) | (g << 3) | b, r << 5, g << 6, b << 5);
+					updatePalette(computeIndex(redTable[r], greenTable[g], blueTable[b]), redTable[r], greenTable[g], blueTable[b]);
+					index++;
+				}
+			}
+		}
+	}
+	else
+	{
+		//_palette16
+		unsigned short swap;
+		for (size_t r = 0; r < 8; r++)
+		{
+			for (size_t g = 0; g < 4; g++)
+			{
+				for (size_t b = 0; b < 8; b++)
+				{
+					swap = rgbTo565(redTable[r], greenTable[g], blueTable[b]);
+					_palette16[index] = (swap << 8) | (swap >> 8);
+					//printf("R %02d G %02d B %02d \n", redTable[r], greenTable[g], blueTable[b]);
+					//printf("Index: %d RGB = %#04X Computed Index: %d\n", index, (unsigned int)_palette16[index], computeIndex(redTable[r], greenTable[g], blueTable[b]));//((r << 5) | (g << 3) | b));
+					index++;
+				}
+			}
+		}
+	}
+	printf("Index = %d\n", index);
+}
+
+unsigned char TVout::computeIndex(unsigned char r, unsigned char g, unsigned char b)
+{
+	unsigned char hashRed, hashGreen, hashBlue;
+	// 0,4,8,16,32,64,128,255;
+	if (r <= 2)
+	{
+		hashRed = 0;
+	}
+	else if (r <= 6)
+	{
+		hashRed = 1;
+	}
+	else if (r <= 12)
+	{
+		hashRed = 2;
+	}
+	else if (r <= 24)
+	{
+		hashRed = 3;
+	}
+	else if (r <= 48)
+	{
+		hashRed = 4;
+	}
+	else if (r <= 96)
+	{
+		hashRed = 5;
+	}
+	else if (r <= 192)
+	{
+		hashRed = 6;
+	}
+	else
+	{
+		hashRed = 7;
+	}
+	// 0,64,128,255
+	if (g <= 32)
+	{
+		hashGreen = 0;
+	}
+	else if (g <= 96)
+	{
+		hashGreen = 1;
+	}
+	else if (g <= 192)
+	{
+		hashGreen = 2;
+	}
+	else
+	{
+		hashGreen = 3;
+	}
+	// 0,4,8,16,32,64,128,255;
+	if (b <= 2)
+	{
+		hashBlue = 0;
+	}
+	else if (b <= 6)
+	{
+		hashBlue = 1;
+	}
+	else if (b <= 12)
+	{
+		hashBlue = 2;
+	}
+	else if (b <= 24)
+	{
+		hashBlue = 3;
+	}
+	else if (b <= 48)
+	{
+		hashBlue = 4;
+	}
+	else if (b <= 96)
+	{
+		hashBlue = 5;
+	}
+	else if (b <= 192)
+	{
+		hashBlue = 6;
+	}
+	else
+	{
+		hashBlue = 7;
+	}
+	//printf("Comp index = %d\n", ((hashRed >> 5) << 5) | ((hashGreen >> 6) << 3) | (hashBlue >> 5));
+
+	return (hashRed << 5) | (hashGreen << 3) | (hashBlue);
+}
+
+void TVout::setColor(unsigned char r, unsigned char g, unsigned char b)
+{
+	paletteIndex = computeIndex(r, g, b);
+}
+
+void TVout::setBackColor(unsigned char r, unsigned char g, unsigned char b)
+{
+	bgPaletteIndex = ((r >> 5) << 5) | ((g >> 6) << 3) | (b >> 5);
+}
+
+unsigned char TVout::getRGB323paletteIndex(unsigned char r, unsigned char g, unsigned char b)
+{
+	return computeIndex(r, g, b);
+}
+
+void TVout::drawCompressed24bitBitmap(short x, short y, const unsigned int * dataArray)
+{
+	unsigned int	hight, width;
+	unsigned int	buffer;
+	int				index = 0;
+	unsigned short  tempX = x, tempY = y;
+	unsigned char	r, g, b;
+
+	width = dataArray[index];
+	index++;
+
+	buffer = dataArray[index];
+	hight = buffer;
+	index++;
+
+	unsigned int dataArraySize = hight * width, i, j, counter = 0;
+	unsigned char copies;
+
+	for (i = DATA_START_OFFSET; counter < dataArraySize; i++)
+	{
+		buffer = dataArray[index];
+		index++;
+		copies = (buffer >> 24);
+		setColor((buffer & 0x000000ff), (buffer & 0x0000ffff) >> 8, (buffer & 0x00ffffff) >> 16);
+		for (int j = 0; j < copies; j++)
+		{
+			drawPixel(tempX, tempY);
+			tempX++;
+			if (tempX == (x + width))
+			{
+				tempY++;
+				tempX = x;
+			}
+		}
+		counter += copies;
+	}
+}
+

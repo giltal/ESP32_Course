@@ -70,23 +70,9 @@ public:
 
 	void readBuffer(bool force = true);
 	uint8_t digitalRead(uint8_t pin);
-	#ifndef PCF8574_LOW_MEMORY
-		struct DigitalInput {
-			uint8_t p0;
-			uint8_t p1;
-			uint8_t p2;
-			uint8_t p3;
-			uint8_t p4;
-			uint8_t p5;
-			uint8_t p6;
-			uint8_t p7;
-		} digitalInput;
 
+	byte digitalReadAll(void);
 
-		DigitalInput digitalReadAll(void);
-	#else
-		byte digitalReadAll(void);
-	#endif
 	void digitalWrite(uint8_t pin, uint8_t value);
 
 private:
@@ -110,7 +96,6 @@ private:
 	unsigned long lastReadMillis = 0;
 
 	byte writeByteBuffered = B00000000;
-
 };
 
 #endif

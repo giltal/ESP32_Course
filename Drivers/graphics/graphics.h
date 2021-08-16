@@ -15,6 +15,9 @@
 #include <driver/i2s.h>
 #include <rom/lldesc.h>
 
+typedef enum { noTrigger = 0, onRiseContinuous = 1, onFailContinuous = 2, onRiseOnce = 3, onFailOnce = 4 }
+triggerOption;
+
 class graphics
 {
 	protected:
@@ -189,7 +192,7 @@ public:
 #define ILI9488P_MAP_8BIT(X)\
 	((0x000C0000 & ((unsigned int)(X) << 12)) | (0x0000F000 & ((unsigned int)(X) << 10)) | (0x00000030 & ((unsigned int)(X) << 4)) | 0x4)
 
-typedef enum ParaBusFreq { _8MHz = 10, _10MHz = 8, _12_5MHz = 6, _16MHz = 5, _20MHz = 4 };
+typedef enum ParaBusFreq { _8MHz = 10, _10MHz = 8, _12_5MHz = 6, _16MHz = 5, _20MHz = 4, _26MHz = 3 };
 
 typedef struct _I2Ssetup
 {
@@ -374,6 +377,8 @@ public:
 	//int	 swapFrameBuffer();
 };
 
+#if 0
+
 // TV out via I2S DAC25 - SVIDEO format
 const unsigned short RGB2YUV[] = {
 32896, 32896, 37249, 37249, 41329, 41329, 45682, 45682, 49778, 50035, 54115, 54115, 58468, 58468, 62564, 62564, 33153, 33153, 37233, 37233, 37490, 41586, 41586, 45939, 45923, 50019, 50276, 54372, 54372, 58468, 58709, 62805, 29041, 33137, 33394, 37490, 37490, 41843, 41827, 41827, 46180, 46180, 50276, 50276, 54613, 54613, 58709, 58966, 29298, 29298, 33394, 33651, 37731, 37731, 42084, 42084, 46180, 46180, 46421, 50517, 50517, 54870, 54870, 58966,
@@ -519,9 +524,53 @@ public:
 	}
 	void setBackColor(unsigned char r, unsigned char g, unsigned char b){ _bgColor = rgb888TO444(r, g, b); _bgColorYUV = RGB2YUV[_bgColor];}
 	void fillScr(unsigned char r, unsigned char g, unsigned char b);
-	void sendFrame();
+	void sendFrame(bool onlyWorkFrame = false);
 	void draw8bBitMap(short x, short y, const unsigned char * dataArray, bool useSkipBit, flipOption flipOpt = noflip);
 	void drawCompressed24bitBitmap(short x, short y, const unsigned int * dataArray);
+	unsigned int getPixel(short x, short y);
 };
+#endif
 
+class TVout : public graphics
+{
+private:
+	// I2S related
+	void fifo_reset(i2s_dev_t* dev);
+	void dev_reset(i2s_dev_t* dev);
+	i2s_port_t port;
+	i2s_dev_t* I2S[I2S_NUM_MAX] = { &I2S0, &I2S1 };
+	unsigned int i2sRegBase = I2S0_REG_BASE;
+	i2s_dev_t* dev;
+	unsigned char pinList[9];
+	volatile int iomux_signal_base;
+	volatile int iomux_clock;
+
+	unsigned char **displayFrame; // uint8_t * *
+	unsigned char paletteIndex = 0;
+	unsigned char bgPaletteIndex = 0;
+	bool		  doubleBufferOn = false;
+	bool		  par9488set = false; // Else ILI9488 8 bit parallel
+	unsigned char computeIndex(unsigned char r, unsigned char g, unsigned char b);
+public:
+	TVout(unsigned short maxX = 320, unsigned short maxY = 240) : graphics(maxX, maxY) {};
+	~TVout() {};
+	bool init(bool doubleBuffer = false, bool par9488 = false, I2Ssetup * i2sSetup = NULL); // True =  TV Out
+	void drawPixel(short x, short y);
+	void drawHLine(short x, short y, int l);
+	void drawVLine(short x, short y, int l);
+	void setColor(unsigned char r, unsigned char g, unsigned char b);
+	void setPaletteIndex(unsigned char index);
+	void setBackColor(unsigned char r, unsigned char g, unsigned char b);
+	unsigned char getRGB323paletteIndex(unsigned char r, unsigned char g, unsigned char b);
+	void fillScr(unsigned char index);
+	void fillScr(unsigned char r, unsigned char g, unsigned char b);
+	void updatePalette(unsigned char index, unsigned char r, unsigned char g, unsigned char b);
+	void updatePalette(unsigned char index, unsigned short val);
+	void generateRGB323palette();
+	//void draw8bBitMap(short x, short y, const unsigned char * dataArray, bool useSkipBit, flipOption flipOpt = noflip);
+	void drawCompressed24bitBitmap(short x, short y, const unsigned int * dataArray);
+	unsigned char getIndex(short x, short y);
+	void swapFrameBuffers();
+	void dmaI2S();
+};
 #endif
