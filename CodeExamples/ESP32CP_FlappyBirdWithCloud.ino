@@ -7,9 +7,43 @@
 #include "PCF8574.h"
 #include <Wire.h>
 #include "graphics.h"
-
 PCF8574 pcf8574(0x21);
-ST77XX_FB lcd;
+SPI_LCD_FrameBuffer lcd;
+class lcdCP_Accessor : public lcdHwAccessor
+{
+public:
+	lcdCP_Accessor() {};
+	~lcdCP_Accessor() {};
+	void setup()
+	{
+		pinMode(5, OUTPUT); //chip select
+		pinMode(23, OUTPUT); //reset
+		pinMode(4, OUTPUT); //Back Light
+	}
+	void reset()
+	{
+		digitalWrite(23, LOW);
+		delay(250);
+		digitalWrite(23, HIGH);
+		delay(250);
+	};
+	void assertCS()
+	{
+		digitalWrite(5, LOW);
+	}
+	void deAssertCS()
+	{
+		digitalWrite(5, HIGH);
+	}
+	void backLightOn()
+	{
+		digitalWrite(4, HIGH);
+	}
+	void backLightOff()
+	{
+
+	}
+} lcdCPAccessor;
 
 #define SPEAKER_PIN 27
 
@@ -67,8 +101,7 @@ const unsigned char angryBird[] = {
 0x46,0x64,0x09,0x99,0x90,0x99,0x99,0x90,0x77,0x77,0x77,0x74,0x74,0x09,0x99,0x90,0x99,0x99,0x99,0x00,0x67,0x77,0x76,0x09,0x99,0x99,0x90,0x99,0x99,0x99,0x99,0x90,
 0x00,0x09,0x99,0x99,0x99,0x90,0x99,0x99,0x99,0x99,0x99,0x99,0x99,0x99,0x99,0x99,0x90,0x99,0x99,0x99,0x99,0x99,0x99,0x99,0x99,0x99,0x99,0x90 };
 
-const unsigned char FlappyBird[] =
-{
+const unsigned char FlappyBird[] = {
 0x00,0x28,0x00,0x28,
 0x99,0x99,0x99,0x99,0x99,0x99,0x99,0x99,0x99,0x99,0x99,0x99,0x99,0x99,0x99,0x99,0x99,0x99,0x99,0x99,0x99,0x99,0x99,0x99,0x99,0x99,0x99,0x99,0x99,0x99,0x90,0x00,
 0x09,0x99,0x99,0x99,0x99,0x99,0x99,0x99,0x99,0x99,0x99,0x99,0x99,0x99,0x99,0x99,0x99,0x99,0x90,0x44,0x40,0x99,0x99,0x99,0x99,0x99,0x99,0x99,0x99,0x99,0x99,0x99,
@@ -163,17 +196,71 @@ void setup()
 
 	Serial.begin(115200);
 	// Setup the LCD screen
-	if (!lcd.init(40000000L))
+	if (!lcd.init(st7789_240x135x16_FB, &lcdCPAccessor, 16, 19, 18, 40000000))
 	{
 		printf("Cannot initialize LCD!");
 		while (1);
 	}
 	// Setup the touch pannel
 }
+void game_init();
 
-// ---------------
-// main loop
-// ---------------
+void game_start()
+{
+	lcd.fillScr(0, 0, 0);
+	lcd.setColor(0xff, 0xff, 0xff);
+	lcd.loadFonts(ORBITRON_LIGHT32);
+	lcd.print("Flappy Bird", 0, 10, true);
+	lcd.print("Press B2", 0, 50, true);
+	lcd.draw8bBitMap(90, 100, FlappyBird, true);
+
+	lcd.flushFrameBuffer();
+
+	//sound(523, 500);
+	//sound(587, 500);
+	//sound(659, 500);
+
+	while (pcf8574.digitalRead(2) == LOW);
+	// init game settings
+	game_init();
+}
+
+void game_init()
+{
+	// clear screen
+	lcd.fillScr(BCKGRDCOL);
+	// reset score
+	score = 0;
+	// init bird
+	bird.x = 60;
+	bird.y = bird.old_y = TFTH2 - BIRDH;
+	bird.vel_y = -JUMP_FORCE;
+	tmpx = tmpy = 0;
+	// generate new random seed for the pipef gape
+	randomSeed(ESP.getCycleCount());
+	// init pipef
+	pipef.x = TFTW;
+}
+
+void game_over()
+{
+	char tempStr[50];
+	lcd.fillScr(0, 0, 0);
+	lcd.setColor(0xff, 0xff, 0xff);
+	lcd.loadFonts(ORBITRON_LIGHT32);
+	lcd.print("Game Over", 0, 10, true);
+	sprintf(tempStr, "Score %d", score);
+	lcd.setColor(0, 0xff, 0);
+	lcd.print(tempStr, 0, 50, true);
+	lcd.setColor(0, 0, 0xff);
+	lcd.print("Press B2", 0, 100, true);
+	lcd.flushFrameBuffer();
+	while (pcf8574.digitalRead(2) == LOW);
+	while (pcf8574.digitalRead(2) == HIGH);
+}
+
+void game_loop();
+
 void loop()
 {
 	game_start();
@@ -294,72 +381,9 @@ void game_loop()
 		//lcd.drawString(tempStr, TFTW2, 4, 20);
 		lcd.loadFonts(OBLIQUE18);
 		lcd.print(tempStr, TFTW2, 4);
-		lcd.flushFB();
+		lcd.flushFrameBuffer();
 	}
 
 	// add a small delay to show how the player lost
 	delay(1000);
-}
-
-// ---------------
-// game start
-// ---------------
-void game_start()
-{
-	lcd.fillScr(0, 0, 0);
-	lcd.setColor(0xff, 0xff, 0xff);
-	lcd.loadFonts(ORBITRON_LIGHT32);
-	lcd.print("Flappy Bird", 0, 10, true);
-	lcd.print("Press B2", 0, 50, true);
-	lcd.draw8bBitMap(90, 100, FlappyBird, true);
-
-	lcd.flushFB();
-
-	//sound(523, 500);
-	//sound(587, 500);
-	//sound(659, 500);
-
-	while (pcf8574.digitalRead(2) == LOW);
-	// init game settings
-	game_init();
-}
-
-// ---------------
-// game init
-// ---------------
-void game_init()
-{
-	// clear screen
-	lcd.fillScr(BCKGRDCOL);
-	// reset score
-	score = 0;
-	// init bird
-	bird.x = 60;
-	bird.y = bird.old_y = TFTH2 - BIRDH;
-	bird.vel_y = -JUMP_FORCE;
-	tmpx = tmpy = 0;
-	// generate new random seed for the pipef gape
-	randomSeed(ESP.getCycleCount());
-	// init pipef
-	pipef.x = TFTW;
-}
-
-// ---------------
-// game over
-// ---------------
-void game_over()
-{
-	char tempStr[50];
-	lcd.fillScr(0, 0, 0);
-	lcd.setColor(0xff, 0xff, 0xff);
-	lcd.loadFonts(ORBITRON_LIGHT32);
-	lcd.print("Game Over", 0, 10, true);
-	sprintf(tempStr, "Score %d", score);
-	lcd.setColor(0, 0xff, 0);
-	lcd.print(tempStr, 0, 50, true);
-	lcd.setColor(0, 0, 0xff);
-	lcd.print("Press B2", 0, 100, true);
-	lcd.flushFB();
-	while (pcf8574.digitalRead(2) == LOW);
-	while (pcf8574.digitalRead(2) == HIGH);
 }
