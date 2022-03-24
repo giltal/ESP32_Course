@@ -8,7 +8,7 @@
 #endif
 #define ICACHE_RODATA_ATTR  __attribute__((section(".irom.text")))
 
-#define fontdatatype static const unsigned short
+#define fontdatatype static unsigned short
 
 // Hebrew charecters + numbers + : , All compressed
 fontdatatype colonCF[] = {

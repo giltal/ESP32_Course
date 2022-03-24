@@ -23,7 +23,44 @@ bool SDmountOK;
 
 PCF8574 pcf8574(0x21);
 
-ST77XX_FB lcd;
+
+SPI_LCD_FrameBuffer lcd;
+
+class ttgoCDacc : public lcdHwAccessor
+{
+public:
+	ttgoCDacc() {};
+	~ttgoCDacc() {};
+	void setup()
+	{
+		pinMode(5, OUTPUT); //chip select
+		pinMode(23, OUTPUT); //reset
+		pinMode(4, OUTPUT); //Back Light
+	}
+	void reset()
+	{
+		digitalWrite(23, LOW);
+		delay(250);
+		digitalWrite(23, HIGH);
+		delay(250);
+	};
+	void assertCS()
+	{
+		digitalWrite(5, LOW);
+	}
+	void deAssertCS()
+	{
+		digitalWrite(5, HIGH);
+	}
+	void backLightOn()
+	{
+		digitalWrite(4, HIGH);
+	}
+	void backLightOff()
+	{
+
+	}
+} ttgoLCDaccessor;
 
 void setup()
 {
@@ -34,11 +71,12 @@ void setup()
 	pcf8574.digitalWrite(P7, HIGH);
 	pcf8574.digitalWrite(P6, HIGH);
 
-	if (!lcd.init())
+	if (!lcd.init(st7789_240x135x16_FB, &ttgoLCDaccessor, 16, 19, 18, 40000000))
 	{
 		printf("LCD init error\n");
 		while (1);
 	}
+
 	// SD Card
 	SDspi.begin(15, 36, 13, -1);
 	pcf8574.digitalWrite(P0, LOW); // Set SD card chip select to low (enabled)
@@ -74,7 +112,7 @@ void loop()
 	lcd.loadFonts(ORBITRON_LIGHT24);
 	sprintf(buf, "FW ver: %.02f", VERSION);
 	lcd.print(buf, 0, 30, true);
-	lcd.flushFB();
+	lcd.flushFrameBuffer();
 	File verFile = SD.open(fw_Version_file, "r");
 	if (verFile)
 	{
@@ -98,4 +136,3 @@ void loop()
 	}
 	while (1);
 }
-

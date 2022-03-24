@@ -36,7 +36,43 @@
 
 PCF8574 pcf8574(0x21);
 
-ST77XX_FB lcd;
+SPI_LCD_FrameBuffer lcd;
+
+class ttgoCDacc : public lcdHwAccessor
+{
+public:
+	ttgoCDacc() {};
+	~ttgoCDacc() {};
+	void setup()
+	{
+		pinMode(5, OUTPUT); //chip select
+		pinMode(23, OUTPUT); //reset
+		pinMode(4, OUTPUT); //Back Light
+	}
+	void reset()
+	{
+		digitalWrite(23, LOW);
+		delay(250);
+		digitalWrite(23, HIGH);
+		delay(250);
+	};
+	void assertCS()
+	{
+		digitalWrite(5, LOW);
+	}
+	void deAssertCS()
+	{
+		digitalWrite(5, HIGH);
+	}
+	void backLightOn()
+	{
+		digitalWrite(4, HIGH);
+	}
+	void backLightOff()
+	{
+
+	}
+} ttgoLCDaccessor;
 
 /* Comment this out to disable prints and save space */
 #define BLYNK_PRINT Serial
@@ -62,7 +98,7 @@ char pass[] = "";
 
 // You should get Auth Token in the Blynk App.
 // Go to the Project Settings (nut icon).
-char auth[] = "V53m-tCvzkDxNBjKsw1HS4riL4OI6Vaa";
+char auth[] = "_CAhRfN_3mWnYK7aK30gDLdr8CBfuUyL";
 
 int virtualJoyX = 0, virtualJoyY = 0;
 
@@ -96,7 +132,7 @@ void setup()
 #ifdef WIFI_BLYNK_DEMO
 	Blynk.begin(auth, ssid, pass);
 #else
-	Blynk.setDeviceName("Gil-Blynk");
+	Blynk.setDeviceName("ESP32Blynk");
 	Blynk.begin(auth);
 #endif	
 	// Setup the IOs
@@ -108,11 +144,12 @@ void setup()
 	pcf8574.digitalWrite(P7, HIGH);
 	pcf8574.digitalWrite(P6, HIGH);
 
-	if (!lcd.init())
+	if (!lcd.init(st7789_240x135x16_FB, &ttgoLCDaccessor, 16, 19, 18, 40000000))
 	{
 		printf("LCD init error\n");
 		while (1);
 	}
+
 	// Blynk related
 	Serial.println("Waiting for connections...");
 }
@@ -125,8 +162,8 @@ void loop()
 	lcd.setColor(virtualPinR * 255, virtualPinG * 255, virtualPinB * 255);
 	x = map(virtualJoyX, 0, 1023, 15, 225);
 	y = map(virtualJoyY, 0, 1023, 120, 15);
-	lcd.drawCircle(x ,y , 14, true);
+	lcd.drawCircle(x, y, 14, true);
 	lcd.setColor(0, 0, 0);
 	lcd.drawCircle(x, y, 15);
-	lcd.flushFB();
+	lcd.flushFrameBuffer();
 }

@@ -22,7 +22,45 @@ AsyncWebServer server(80);
 
 PCF8574 pcf8574(0x21);
 
-ST77XX_FB lcd;
+SPI_LCD_FrameBuffer lcd;
+
+class ttgoCDacc : public lcdHwAccessor
+{
+public:
+	ttgoCDacc() {};
+	~ttgoCDacc() {};
+	void setup()
+	{
+		pinMode(5, OUTPUT); //chip select
+		pinMode(23, OUTPUT); //reset
+		pinMode(4, OUTPUT); //Back Light
+	}
+	void reset()
+	{
+		digitalWrite(23, LOW);
+		delay(250);
+		digitalWrite(23, HIGH);
+		delay(250);
+	};
+	void assertCS()
+	{
+		digitalWrite(5, LOW);
+	}
+	void deAssertCS()
+	{
+		digitalWrite(5, HIGH);
+	}
+	void backLightOn()
+	{
+		digitalWrite(4, HIGH);
+	}
+	void backLightOff()
+	{
+
+	}
+} ttgoLCDaccessor;
+
+bool connectToWiFiSTA(const char * name, const char * pass);
 
 void setup()
 {
@@ -33,7 +71,7 @@ void setup()
 	pcf8574.digitalWrite(P7, HIGH);
 	pcf8574.digitalWrite(P6, HIGH);
 
-	if (!lcd.init())
+	if (!lcd.init(st7789_240x135x16_FB, &ttgoLCDaccessor, 16, 19, 18, 40000000))
 	{
 		printf("LCD init error\n");
 		while (1);
@@ -64,8 +102,8 @@ void loop()
 	lcd.print((char *)str.c_str(), 0, 30, true);
 	str = WiFi.localIP().toString();
 	lcd.print((char *)str.c_str(), 0, 70, true);
-	lcd.flushFB();
-	
+	lcd.flushFrameBuffer();
+
 	while (1);
 }
 

@@ -31,11 +31,50 @@ void wifiSetup_page();
 void toggleIO_page();
 void handle_NotFound();
 
+void handleTempHumidity();
+void handleADC();
+
 bool wifiSetupPageVisited = false;
 bool toggleIOpageVisited = false;
 
 PCF8574 pcf8574(0x21);
-ST77XX_FB lcd;
+SPI_LCD_FrameBuffer lcd;
+
+class ttgoCDacc : public lcdHwAccessor
+{
+public:
+	ttgoCDacc() {};
+	~ttgoCDacc() {};
+	void setup()
+	{
+		pinMode(5, OUTPUT); //chip select
+		pinMode(23, OUTPUT); //reset
+		pinMode(4, OUTPUT); //Back Light
+	}
+	void reset()
+	{
+		digitalWrite(23, LOW);
+		delay(250);
+		digitalWrite(23, HIGH);
+		delay(250);
+	};
+	void assertCS()
+	{
+		digitalWrite(5, LOW);
+	}
+	void deAssertCS()
+	{
+		digitalWrite(5, HIGH);
+	}
+	void backLightOn()
+	{
+		digitalWrite(4, HIGH);
+	}
+	void backLightOff()
+	{
+
+	}
+} ttgoLCDaccessor;
 
 // the setup function runs once when you press reset or power the board
 void setup()
@@ -48,7 +87,7 @@ void setup()
 	pcf8574.digitalWrite(P7, HIGH);
 	pcf8574.digitalWrite(P6, HIGH);
 
-	if (!lcd.init())
+	if (!lcd.init(st7789_240x135x16_FB, &ttgoLCDaccessor, 16, 19, 18, 40000000))
 	{
 		printf("LCD init error\n");
 		while (1);
@@ -111,14 +150,14 @@ void setup()
 
 // the loop function runs over and over again until power down or reset
 
-String wifiName = "", wifiPass = "";
+String wifiName = "TPLINK", wifiPass = "";
 
 void loop()
 {
-	printf("Temp %f\n",dht.readHumidity()*1.57);
+	printf("Temp %f\n", dht.readHumidity()*1.57);
 	printf("Hume %f\n", dht.readTemperature());
 
-	
+
 	int numOfClientsConnected;
 	lcd.loadFonts(ORBITRON_LIGHT24);
 	File file;
@@ -251,7 +290,7 @@ void loop()
 			lcd.print("WiFi Connected", 0, 60, true);
 			lcd.print((char *)WiFi.localIP().toString().c_str(), 0, 100, true);
 		}
-		lcd.flushFB();
+		lcd.flushFrameBuffer();
 	}
 }
 
@@ -522,12 +561,12 @@ document.getElementById("datetime").innerHTML = (dow) +" "+ (dt.toLocaleString()
 </html>
 )=====";
 
-void handleTempHumidity() 
+void handleTempHumidity()
 {
 	server.send(200, "text/html", tempHumePage); //Send web page
 }
 
-void handleADC() 
+void handleADC()
 {
 	// send XML file containing input states
 #ifdef DHT_PRESENT

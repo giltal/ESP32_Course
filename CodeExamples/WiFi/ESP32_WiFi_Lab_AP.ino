@@ -23,8 +23,43 @@ bool wifiSetupPageVisited = false;
 bool toggleIOpageVisited = false;
 
 PCF8574 pcf8574(0x21);
-ST77XX_FB lcd;
+SPI_LCD_FrameBuffer lcd;
 
+class ttgoCDacc : public lcdHwAccessor
+{
+public:
+	ttgoCDacc() {};
+	~ttgoCDacc() {};
+	void setup()
+	{
+		pinMode(5, OUTPUT); //chip select
+		pinMode(23, OUTPUT); //reset
+		pinMode(4, OUTPUT); //Back Light
+	}
+	void reset()
+	{
+		digitalWrite(23, LOW);
+		delay(250);
+		digitalWrite(23, HIGH);
+		delay(250);
+	};
+	void assertCS()
+	{
+		digitalWrite(5, LOW);
+	}
+	void deAssertCS()
+	{
+		digitalWrite(5, HIGH);
+	}
+	void backLightOn()
+	{
+		digitalWrite(4, HIGH);
+	}
+	void backLightOff()
+	{
+
+	}
+} ttgoLCDaccessor;
 // the setup function runs once when you press reset or power the board
 void setup()
 {
@@ -36,7 +71,7 @@ void setup()
 	pcf8574.digitalWrite(P7, LOW);
 	pcf8574.digitalWrite(P6, LOW);
 
-	if (!lcd.init())
+	if (!lcd.init(st7789_240x135x16_FB, &ttgoLCDaccessor, 16, 19, 18, 40000000))
 	{
 		printf("LCD init error\n");
 		while (1);
@@ -77,7 +112,7 @@ void loop()
 	lcd.fillScr(255, 255, 255);
 	lcd.setColor(255, 0, 0);
 	lcd.print("ON", 0, 40, true);
-	lcd.flushFB();
+	lcd.flushFrameBuffer();
 	bool IO3set = true;
 
 	while (1)
@@ -147,7 +182,7 @@ void loop()
 		}
 		lcd.print("AP address", 0, 60, true);
 		lcd.print((char *)WiFi.softAPIP().toString().c_str(), 0, 100, true);
-		lcd.flushFB();
+		lcd.flushFrameBuffer();
 	}
 }
 

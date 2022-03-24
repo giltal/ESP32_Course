@@ -18,11 +18,14 @@
 #define VIDEO_OUT_h
 
 #define Screen_WIDTH	384
-#define Screen_HEIGHT	240
+unsigned int Screen_HEIGHT = 240;//	240
+//#define Screen_HEIGHT	269
 
 int _pal_ = 1;
-bool _par9488 = false;
 int _9488_lineIndex;
+#define NUM_OF_LINES_FOR_DMA	6
+bool _9488_stopIntFlag = true;
+float _FPS;
 
 unsigned short _maxX = 320, _maxY = 240; // Only for 9488 parallel mode
 
@@ -53,7 +56,7 @@ unsigned short _maxX = 320, _maxY = 240; // Only for 9488 parallel mode
 //
 
 lldesc_t _dma_desc[4] = {0};
-unsigned short * dmaBuffer9488;
+unsigned short * dmaBuffer9488[2];
 intr_handle_t _isr_handle;
 i2s_dev_t* _dev;
 
@@ -75,38 +78,100 @@ void IRAM_ATTR i2s_intr_handler_video(void *arg)
 
 #define _ESP_READ_REG(REG) (*((volatile unsigned char *)(((REG)))))
 #define _I2S0_REG_BASE	0x3FF6D000 /* 0x3FF4F000 - I2S 0*/
+bool _once = true;
+int dmaBufferIndex = 0;
 
+#if 1
+void IRAM_ATTR i2s_intr_handler_9488(void *arg)
+{
+	while ((!((_ESP_READ_REG(_I2S0_REG_BASE + 0xBC) & 0x1) == 0x1)));
+	if (I2S1.int_st.out_eof) // get the next line of video
+	{
+		_dev->out_link.stop = 1;
+		_dev->out_link.start = 0;
+		_dev->conf.tx_start = 0;
+		//dev_reset(dev);
+		unsigned int lcConf = *((volatile unsigned char *)(((_I2S0_REG_BASE + 0x60))));
+		unsigned int conf = *((volatile unsigned char *)(((_I2S0_REG_BASE + 0x8))));
+		// do rmw
+		(*((volatile unsigned char *)(((_I2S0_REG_BASE + 0x8)))) = conf | 0x5);
+		(*((volatile unsigned char *)(((_I2S0_REG_BASE + 0x8)))) = conf);
+		(*((volatile unsigned char *)(((_I2S0_REG_BASE + 0x60)))) = lcConf | 0x3);
+		(*((volatile unsigned char *)(((_I2S0_REG_BASE + 0x60)))) = lcConf);
+		// Until here
+
+		// Configure DMA burst mode
+		_dev->lc_conf.val = I2S_OUT_DATA_BURST_EN | I2S_OUTDSCR_BURST_EN;
+		// Set address of DMA descriptor
+		_dma_desc[0].buf = (volatile uint8_t*)dmaBuffer9488[dmaBufferIndex];
+		_dev->out_link.addr = (uint32_t)_dma_desc;
+		// Start DMA operation
+		if (!_9488_stopIntFlag)
+		{
+			_dev->out_link.start = 1;
+			_dev->conf.tx_start = 1;
+		}
+		dmaBufferIndex++;
+		if (dmaBufferIndex == 2)
+		{
+			dmaBufferIndex = 0;
+		}
+		_9488_lineIndex += NUM_OF_LINES_FOR_DMA;
+
+		if (_9488_lineIndex >= _maxY)
+		{
+			_9488_lineIndex = 0;
+			_9488_stopIntFlag = true;
+		}
+		for (size_t X = 0, j = 0; j < NUM_OF_LINES_FOR_DMA; j++, X += _maxX)
+		{
+			for (size_t i = 0; i < _maxX; i += 2)
+			{
+				dmaBuffer9488[dmaBufferIndex][X + i] = _palette16[_lines[_9488_lineIndex + j][i + 1]];
+				dmaBuffer9488[dmaBufferIndex][X + i + 1] = _palette16[_lines[_9488_lineIndex + j][i]];
+			}
+		}
+	}
+	I2S1.int_clr.val = I2S1.int_st.val;                     // reset the interrupt
+}
+#else
 void IRAM_ATTR i2s_intr_handler_9488(void *arg)
 {
 	if (I2S1.int_st.out_eof) // get the next line of video
 	{
-		//_9488_lineIndex - handle int to short order in memory
-		//while ((!((_ESP_READ_REG(_I2S0_REG_BASE + 0xBC) & 0x1) == 0x1)));
-
-		for (size_t i = 0; i < _maxX; i+=2)
+		for (size_t i = 0; i < _maxX; i += 2)
 		{
-			dmaBuffer9488[i]   = _palette16[_lines[_9488_lineIndex][i+1]];
-			dmaBuffer9488[i+1] = _palette16[_lines[_9488_lineIndex][i]];
+			dmaBuffer9488[dmaBufferIndex][i] = _palette16[_lines[_9488_lineIndex][i + 1]];
+			dmaBuffer9488[dmaBufferIndex][i + 1] = _palette16[_lines[_9488_lineIndex][i]];
 
-			dmaBuffer9488[_maxX * 1 + i]   = _palette16[_lines[_9488_lineIndex + 1][i+1]];
-			dmaBuffer9488[_maxX * 1 + i+1] = _palette16[_lines[_9488_lineIndex + 1][i]];
+			dmaBuffer9488[dmaBufferIndex][_maxX * 1 + i] = _palette16[_lines[_9488_lineIndex + 1][i + 1]];
+			dmaBuffer9488[dmaBufferIndex][_maxX * 1 + i + 1] = _palette16[_lines[_9488_lineIndex + 1][i]];
 
-			dmaBuffer9488[_maxX * 2 + i]   = _palette16[_lines[_9488_lineIndex + 2][i+1]];
-			dmaBuffer9488[_maxX * 2 + i+1] = _palette16[_lines[_9488_lineIndex + 2][i]];
+			dmaBuffer9488[dmaBufferIndex][_maxX * 2 + i] = _palette16[_lines[_9488_lineIndex + 2][i + 1]];
+			dmaBuffer9488[dmaBufferIndex][_maxX * 2 + i + 1] = _palette16[_lines[_9488_lineIndex + 2][i]];
 
-			dmaBuffer9488[_maxX * 3 + i]   = _palette16[_lines[_9488_lineIndex + 3][i+1]];
-			dmaBuffer9488[_maxX * 3 + i+1] = _palette16[_lines[_9488_lineIndex + 3][i]];
+			dmaBuffer9488[dmaBufferIndex][_maxX * 3 + i] = _palette16[_lines[_9488_lineIndex + 3][i + 1]];
+			dmaBuffer9488[dmaBufferIndex][_maxX * 3 + i + 1] = _palette16[_lines[_9488_lineIndex + 3][i]];
+#if(NUM_OF_LINES_FOR_DMA == 6)
+			dmaBuffer9488[dmaBufferIndex][_maxX * 4 + i] = _palette16[_lines[_9488_lineIndex + 4][i + 1]];
+			dmaBuffer9488[dmaBufferIndex][_maxX * 4 + i + 1] = _palette16[_lines[_9488_lineIndex + 4][i]];
 
-			dmaBuffer9488[_maxX * 4 + i] = _palette16[_lines[_9488_lineIndex + 4][i + 1]];
-			dmaBuffer9488[_maxX * 4 + i + 1] = _palette16[_lines[_9488_lineIndex + 4][i]];
-
-			dmaBuffer9488[_maxX * 5 + i] = _palette16[_lines[_9488_lineIndex + 5][i + 1]];
-			dmaBuffer9488[_maxX * 5 + i + 1] = _palette16[_lines[_9488_lineIndex + 5][i]];
+			dmaBuffer9488[dmaBufferIndex][_maxX * 5 + i] = _palette16[_lines[_9488_lineIndex + 5][i + 1]];
+			dmaBuffer9488[dmaBufferIndex][_maxX * 5 + i + 1] = _palette16[_lines[_9488_lineIndex + 5][i]];
+#endif
 		}
-		_9488_lineIndex += 6;
+
+		_9488_lineIndex += NUM_OF_LINES_FOR_DMA;
+
 		if (_9488_lineIndex >= _maxY)
 		{
 			_9488_lineIndex = 0;
+			_9488_stopIntFlag = true;
+			if (_once)
+			{
+				//_FPS = 240000000.0 / (ESP.getCycleCount() - _FPS);
+				_once = false;
+			}
 		}
 
 		//while ((!((_ESP_READ_REG(_I2S0_REG_BASE + 0xBC) & 0x1) == 0x1)));
@@ -129,13 +194,17 @@ void IRAM_ATTR i2s_intr_handler_9488(void *arg)
 		// Set address of DMA descriptor
 		_dev->out_link.addr = (uint32_t)_dma_desc;
 		// Start DMA operation
-		_dev->out_link.start = 1;
-		_dev->conf.tx_start = 1;
+		if (!_9488_stopIntFlag)
+		{
+			_dev->out_link.start = 1;
+			_dev->conf.tx_start = 1;
+		}
+
 	}
+
 	I2S1.int_clr.val = I2S1.int_st.val;                     // reset the interrupt
 }
-
-
+#endif
 static esp_err_t start_dma(int line_width,int samples_per_cc, int ch = 1)
 {
     periph_module_enable(PERIPH_I2S0_MODULE);
@@ -157,7 +226,8 @@ static esp_err_t start_dma(int line_width,int samples_per_cc, int ch = 1)
     I2S0.conf_chan.tx_chan_mod = (ch == 2) ? 0 : 1;
 
     // Create TX DMA buffers
-    for (int i = 0; i < 2; i++) {
+    for (int i = 0; i < 2; i++) 
+	{
         int n = line_width*2*ch;
         if (n >= 4092) {
             printf("DMA chunk too big:%s\n",n);
@@ -215,7 +285,8 @@ static esp_err_t start_dma(int line_width,int samples_per_cc, int ch = 1)
 
 static esp_err_t start_dma_9488()
 {
-	_9488_lineIndex = 6;
+	_9488_lineIndex = 0;// NUM_OF_LINES_FOR_DMA;
+	_9488_stopIntFlag = false;
 	// setup interrupt
 	if (esp_intr_alloc(ETS_I2S1_INTR_SOURCE, ESP_INTR_FLAG_LEVEL1 | ESP_INTR_FLAG_IRAM,
 		i2s_intr_handler_9488, 0, &_isr_handle) != ESP_OK)
@@ -241,6 +312,8 @@ static esp_err_t start_dma_9488()
 	// Start DMA operation
 	_dev->out_link.start = 1;
 	_dev->conf.tx_start = 1;
+
+	_FPS = ESP.getCycleCount();
 
 	return esp_intr_enable(_isr_handle);        // start interruprs!
 }
@@ -465,174 +538,104 @@ void pal_init()
 	}
 }
 
-bool video_init(bool doubleBuffer, bool par9488)
+bool video_init(unsigned short Xresolution, unsigned short Yresolution, bool usePsram, bool palPallete)
 {
-	if (!par9488)
+	_samples_per_cc = 4;
+	if (palPallete)
 	{
-		_samples_per_cc = 4;
 		_palette = (uint32_t*)pal_palette();
-		if (doubleBuffer)
+		if (!_palette)
 		{
-			_Frame0lines = (uint8_t**)heap_caps_malloc(Screen_HEIGHT * sizeof(uint8_t*), MALLOC_CAP_DMA);
-			if (_Frame0lines == NULL)
-			{
-				printf("Cannot allocate screen buffer - lines!\n");
-				free(screen);
-				return false;
-			}
+			printf("Cannot allocate - _palette!\n");
+			return false;
+		}
 
-			for (int y = 0; y < Screen_HEIGHT; y++)
-			{
-				_Frame0lines[y] = (unsigned char *)heap_caps_malloc(320, MALLOC_CAP_DMA); //(uint8_t*)s;
-				if (_Frame0lines[y] == NULL)
-				{
-					printf("Cannot allocate screen buffer - lines!\n");
-					return false;
-				}
-			}
+	}
+	else
+	{
+		_palette16 = (uint16_t*)rgb16palette();
+		if (!_palette16)
+		{
+			printf("Cannot allocate - _palette16!\n");
+			return false;
+		}
+		
+		dmaBuffer9488[0] = (uint16_t*)heap_caps_malloc(Xresolution * sizeof(uint16_t) * NUM_OF_LINES_FOR_DMA, MALLOC_CAP_DMA); // 4/6 lines at a time
+		if (!dmaBuffer9488[0])
+		{
+			printf("Cannot allocate screen buffer - dmaBuffer9488[0]!\n");
+			return false;
+		}
+		dmaBuffer9488[1] = (uint16_t*)heap_caps_malloc(Xresolution * sizeof(uint16_t) * NUM_OF_LINES_FOR_DMA, MALLOC_CAP_DMA); // 4/6 lines at a time
+		if (!dmaBuffer9488[1])
+		{
+			printf("Cannot allocate screen buffer - dmaBuffer9488[1]!\n");
+			return false;
+		}
 
-			_Frame1lines = (uint8_t**)heap_caps_malloc(Screen_HEIGHT * sizeof(uint8_t*), MALLOC_CAP_DMA);
-			if (_Frame1lines == NULL)
-			{
-				printf("Cannot allocate screen buffer - lines!\n");
-				free(screen);
-				return false;
-			}
 
-			for (int y = 0; y < Screen_HEIGHT; y++)
-			{
-				_Frame1lines[y] = (unsigned char *)heap_caps_malloc(320, MALLOC_CAP_DMA); //(uint8_t*)s;
-				if (_Frame1lines[y] == NULL)
-				{
-					printf("Cannot allocate screen buffer - lines!\n");
-					return false;
-				}
-			}
+	}
+	Screen_HEIGHT = Yresolution;
+	// Pointers allocation
+	_Frame0lines = (uint8_t**)heap_caps_malloc((Screen_HEIGHT+1) * sizeof(uint8_t*), MALLOC_CAP_DMA);
+	if (_Frame0lines == NULL)
+	{
+		printf("Cannot allocate screen buffer - pointers!\n");
+		return false;
+	}
+
+	for (int y = 0; y < Screen_HEIGHT; y++)
+	{
+		if (usePsram)
+		{
+			_Frame0lines[y] = (unsigned char *)ps_malloc(Xresolution); //(uint8_t*)s;
 		}
 		else
 		{
-			_Frame0lines = (uint8_t**)heap_caps_malloc(Screen_HEIGHT * sizeof(uint8_t*), MALLOC_CAP_DMA);
-			if (_Frame0lines == NULL)
-			{
-				printf("Cannot allocate screen buffer - lines!\n");
-				return false;
-			}
-
-			for (int y = 0; y < Screen_HEIGHT; y++)
-			{
-				_Frame0lines[y] = (unsigned char *)heap_caps_malloc(320, MALLOC_CAP_DMA); //(uint8_t*)s;
-				if (_Frame0lines[y] == NULL)
-				{
-					printf("Cannot allocate screen buffer - lines!\n");
-					return false;
-				}
-			}
+			_Frame0lines[y] = (unsigned char *)heap_caps_malloc(Xresolution, MALLOC_CAP_DMA); //(uint8_t*)s;
+		}
+		if (_Frame0lines[y] == NULL)
+		{
+			printf("Cannot allocate screen buffer - lines!\n");
+			return false;
 		}
 
-		_lines = _Frame0lines;
+	}
+	_lines = _Frame0lines;
+
+	if (palPallete)
+	{
 		pal_init();
 		_pal_ = 1;
 
-		_active_lines = 240;
+		_active_lines = Screen_HEIGHT;
 
 		if (start_dma(_line_width, _samples_per_cc, 1) == -1)
 			return false;
 		else
 			return true;
 	}
-	else // Parallel 9488 - 8 bit
+	else // Parallel LCD
 	{
-		_palette16 = (uint16_t*)rgb16palette();
-		if (!_palette16)
-		{
-			printf("Cannot allocate screen buffer - _palette16!\n");
-			return false;
-		}
-
-		dmaBuffer9488 = (uint16_t*)heap_caps_malloc(_maxX * sizeof(uint16_t) * 6, MALLOC_CAP_DMA); // 4 lines at a time
-		if (!dmaBuffer9488)
-		{
-			printf("Cannot allocate screen buffer - dmaBuffer9488!\n");
-			return false;
-		}
-
-		if (doubleBuffer)
-		{
-			_Frame0lines = (uint8_t**)heap_caps_malloc(_maxY * sizeof(uint8_t*), MALLOC_CAP_DMA);
-			if (_Frame0lines == NULL)
-			{
-				printf("Cannot allocate screen buffer - lines!\n");
-				free(screen);
-				return false;
-			}
-
-			for (int y = 0; y < _maxY; y++)
-			{
-				_Frame0lines[y] = (unsigned char *)heap_caps_malloc(_maxX, MALLOC_CAP_DMA); //(uint8_t*)s;
-				if (_Frame0lines[y] == NULL)
-				{
-					printf("Cannot allocate screen buffer - lines!\n");
-					return false;
-				}
-			}
-
-			_Frame1lines = (uint8_t**)heap_caps_malloc(_maxY * sizeof(uint8_t*), MALLOC_CAP_DMA);
-			if (_Frame1lines == NULL)
-			{
-				printf("Cannot allocate screen buffer - lines!\n");
-				free(screen);
-				return false;
-			}
-
-			for (int y = 0; y < _maxY; y++)
-			{
-				_Frame1lines[y] = (unsigned char *)heap_caps_malloc(_maxX, MALLOC_CAP_DMA); //(uint8_t*)s;
-				if (_Frame1lines[y] == NULL)
-				{
-					printf("Cannot allocate screen buffer - lines!\n");
-					return false;
-				}
-			}
-		}
-		else // single buffer
-		{
-			_Frame0lines = (uint8_t**)heap_caps_malloc(_maxY * sizeof(uint8_t*), MALLOC_CAP_DMA);
-			if (_Frame0lines == NULL)
-			{
-				printf("Cannot allocate screen buffer - lines!\n");
-				free(screen);
-				return false;
-			}
-
-			for (int y = 0; y < _maxY; y++)
-			{
-				_Frame0lines[y] = (unsigned char *)heap_caps_malloc(_maxX, MALLOC_CAP_DMA); //(uint8_t*)s;
-				if (_Frame0lines[y] == NULL)
-				{
-					printf("Cannot allocate screen buffer - lines!\n");
-					return false;
-				}
-			}
-		}
-
-		_lines = _Frame0lines;
 		_9488_lineIndex = 0;
-		
+
 		// DMA descriptor
-		_dma_desc[0].buf = (volatile uint8_t*)dmaBuffer9488;
+		_dma_desc[0].buf = (volatile uint8_t*)dmaBuffer9488[0];
 		_dma_desc[0].owner = 1;
 		_dma_desc[0].eof = 1;
 		_dma_desc[0].sosf = 0;
-		_dma_desc[0].length = _maxX * sizeof(uint16_t) * 6;
-		_dma_desc[0].size = _maxX * sizeof(uint16_t) * 6;
+		_dma_desc[0].length = Xresolution * sizeof(uint16_t) * NUM_OF_LINES_FOR_DMA;
+		_dma_desc[0].size = Xresolution * sizeof(uint16_t) * NUM_OF_LINES_FOR_DMA;
 		_dma_desc[0].empty = 0;
 		_dma_desc[0].offset = 0;
 
 		if (start_dma_9488() == -1)
+		{
+			printf("Error at: start_dma_9488\n");
 			return false;
-		else
-			return true;
+		}
 	}
+
 	return true;
 }
 
@@ -791,15 +794,16 @@ void IRAM_ATTR video_isr(volatile void* vbuf)
 	int i = _line_counter++;
     uint16_t* buf = (uint16_t*)vbuf;
     // pal
-    if (i < 32) 
+#define START_OFFSET 28
+	if (i < START_OFFSET)
 	{
-        blanking(buf,false);                // pre render/black 0-32
+        blanking(buf,false);                // pre render/black 0-27
     } 
-	else if (i < (_active_lines + 32)) 
+	else if (i < (_active_lines + START_OFFSET))
 	{    // active video 32-272
         sync(buf,_hsync);
         burst(buf);
-		blit_pal(_lines[i - 32], buf + _active_start);
+		blit_pal(_lines[i - START_OFFSET], buf + _active_start);
     }
 	else if (i < 304) 
 	{                   // post render/black 272-304

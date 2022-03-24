@@ -1,8 +1,9 @@
 /*
- Name:		ESP32_TTGO_LCD.ino
- Created:	8/6/2020 1:56:38 PM
+ Name:		ESP32_CourseTemplate.ino
+ Created:	22-Jun-21 7:57:04 AM
  Author:	giltal
 */
+
 #include "graphics.h"
 #include <Wiimote.h>
 #include "FS.h"
@@ -983,7 +984,43 @@ void wiiMoteTask(void * pvParameters)
 SPIClass SDspi(HSPI); // VSPI is used by LCD
 bool SDmountOK;
 
-ST77XX lcd(_240x135);
+SPI_LCD lcd;
+
+class ttgoCDacc : public lcdHwAccessor
+{
+public:
+	ttgoCDacc() {};
+	~ttgoCDacc() {};
+	void setup()
+	{
+		pinMode(5, OUTPUT); //chip select
+		pinMode(23, OUTPUT); //reset
+		pinMode(4, OUTPUT); //Back Light
+	}
+	void reset()
+	{
+		digitalWrite(23, LOW);
+		delay(250);
+		digitalWrite(23, HIGH);
+		delay(250);
+	};
+	void assertCS()
+	{
+		digitalWrite(5, LOW);
+	}
+	void deAssertCS()
+	{
+		digitalWrite(5, HIGH);
+	}
+	void backLightOn()
+	{
+		digitalWrite(4, HIGH);
+	}
+	void backLightOff()
+	{
+
+	}
+} ttgoLCDaccessor;
 
 // the setup function runs once when you press reset or power on the board
 
@@ -993,8 +1030,8 @@ void setup()
 
 	Serial.begin(115200);
 	printf("ST77XX LCD init\n");
-	lcd.init(40000000); // 40MHz
-
+	lcd.init(st7789_240x135x16, &ttgoLCDaccessor, 16, 19, 18, 40000000);
+	
 	pcf8574.begin();
 
 	pcf8574.pinMode(P0, OUTPUT); // SD CS
@@ -1080,6 +1117,8 @@ void loop()
 {
 	unsigned long cycles = ESP.getCycleCount();
 	lcd.fillScr(0, 0, 0);
+	lcd.setColor(255, 0, 0);
+	lcd.drawCircle(100, 100, 10);
 	printf("Full screen fill FPS = %f\n", 1.0 / ((ESP.getCycleCount() - cycles) / 240000000.0));
 	lcd.setColor(0, 255, 0);
 	lcd.drawRect(0, 0, lcd.getXSize() - 1, lcd.getYSize() - 1);
@@ -1100,6 +1139,7 @@ void loop()
 	printf("Time: %f\n", (ESP.getCycleCount() - cycles) / 240000000.0);*/
 	lcd.loadFonts(ORBITRON_LIGHT32);
 	lcd.setColor(255, 255, 255);
+	lcd.setBackColor(0, 0, 0);
 	lcd.print("ESP32", 0, 52, true);
 	lcd.drawCompressed24bitBitmap(0, 0, Tetris);
 	listSDcardFiles("/myFolder");
