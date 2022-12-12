@@ -74,6 +74,7 @@ void setup()
 	pcf8574.pinMode(3, INPUT);
 	pinMode(PROBE_PIN, ANALOG);
 	pinMode(25, OUTPUT);
+	pinMode(26, ANALOG);
 
 	if (!lcd.init(st7789_240x135x16_FB, &ttgoLCDaccessor, 16, 19, 18, 40000000))
 	{
@@ -81,11 +82,11 @@ void setup()
 		while (1);
 	}
 
-	ledcSetup(1/*Channel*/, 2000/*Freq*/, 8/*Number of bits for resolution of duty cycle*/);
+	ledcSetup(1/*Channel*/, 50/*Freq*/, 8/*Number of bits for resolution of duty cycle*/);
 	ledcAttachPin(25, 1);
 	ledcWriteTone(1/*Channel*/, 50/*Freq*/);
 
-	ledcWrite(1/*Channel*/, 500 /*Duty Cycle*/);
+	ledcWrite(1/*Channel*/, 128 /*Duty Cycle*/);
 }
 
 void displayBasicScreen()
@@ -145,7 +146,7 @@ void displaySamples()
 // the loop function runs over and over again until power down or reset
 void loop()
 {
-	unsigned int winWidthIndex = 0;
+	unsigned int winWidthIndex = 0, potentiometer, dutyCycle;
 	char tempStr[10];
 	lcd.fillScr(0, 0, 0);
 	lcd.loadFonts(ORBITRON_LIGHT32);
@@ -156,6 +157,10 @@ void loop()
 	delay(2000);
 	while (1)
 	{
+		potentiometer = analogRead(26);
+		dutyCycle = map(potentiometer, 0, 4095, 0, 255);
+		ledcWrite(1/*Channel*/, dutyCycle /*Duty Cycle*/);
+		//printf("%d\n", dutyCycle);
 		displayBasicScreen();
 		collectSamples(windowWidthTimeTable[winWidthIndex]);
 		displaySamples();
