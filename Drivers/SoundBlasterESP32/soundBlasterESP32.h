@@ -5,13 +5,13 @@
 #define WAV_PLAYER_BUF_SIZE 256
 #define WAS_SUB_BLOCK_SIZE	512
 
-typedef enum soundPlayMode
+enum soundPlayMode
 {
 	I2S_MODE,
 	CPU_INT_MODE
 };
 
-typedef enum dacNumber
+enum dacNumber
 {
 	USE_DAC25,
 	USE_DAC26,

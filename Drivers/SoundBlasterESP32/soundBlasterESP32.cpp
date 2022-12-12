@@ -1,5 +1,4 @@
 #include "soundBlasterESP32.h"
-#include "FreeRTOS.h"
 #include "driver/i2s.h"
 #include "esp32-hal-timer.h"
 #include "soc/ledc_struct.h"
@@ -8,6 +7,8 @@
 
 #include<stdio.h>
 #include<string.h>
+
+#include "ESP32_FastInt.h"
 
 #define SB_DEBUG 1
 
@@ -39,9 +40,7 @@ soundBlaster::soundBlaster(soundPlayMode playMode, dacNumber dacPinNumber, unsig
 	if (ioPin != 0xff && pwmChannel != 0xff)
 	{
 		pinMode(ioPin, OUTPUT);
-		//ledcSetup(pwmChannel,2000, 16);
-		//ledcAttachPin(ioPin, pwmChannel);
-		ledcSetup(pwmChannel, 2000000, 7);    // 625000 khz is as fast as we go w 7 bits
+		ledcSetup(pwmChannel, /*44100*/11025*2, 8);
 		ledcAttachPin(ioPin, pwmChannel);
 		ledcWrite(pwmChannel, 0);
 		_IOpin = ioPin;
@@ -94,6 +93,7 @@ bool soundBlaster::loadWAV(unsigned char * WAVdata)
 	printf("Bit per sample: %d\n", WAVhandler->BitsPerSample);
 	printf("Data Size: %d\n", WAVhandler->Subchunk2Size);
 #endif
+	ledcSetup(pwmChannel, WAVhandler->SampleRate * 2, WAVhandler->BitsPerSample);
 	WAVhandler->data = (char *)&WAVdata[44];
 	WAVinfoLoaded = true;
 	return true;
@@ -353,23 +353,28 @@ void IRAM_ATTR onTimerNotesPlayer()
 	}
 }
 
-void _restartNotesInt(unsigned short durationInMiliSec)
+void IRAM_ATTR _restartNotesInt(unsigned short durationInMiliSec)
 {
 	if (_playing == false) // First time
 	{
-		timerAlarmDisable(timer);
-		timerDetachInterrupt(timer);
-		timerEnd(timer);
-		timer = timerBegin(_timerNum, 80, true);
+		if (timer != NULL)
+		{
+			timerAlarmDisable(timer);
+			timerDetachInterrupt(timer);
+			timerEnd(timer);
+		}
+		timer = timerBegin(_timerNum, 80, true); // 1MHz
 		timerAttachInterrupt(timer, &onTimerNotesPlayer, true);
-		timerAlarmWrite(timer, durationInMiliSec * 1000, false);
+		timerAlarmWrite(timer, durationInMiliSec * 1000, true);
 		timerAlarmEnable(timer);
 	}
 	else
 	{
 		_playing = true;
-		timerAlarmWrite(timer, durationInMiliSec * 1000, false);
-		timerRestart(timer);
+		//timerAlarmWrite(timer, durationInMiliSec * 1000, false);
+		//timerRestart(timer);
+		ESP_WRITE_REG(TIMG0_T0ALARMLO_REG, durationInMiliSec * 1000);
+		ESP_WRITE_REG(TIMG0_T0LOAD_REG, 0);
 	}
 }
 
@@ -380,15 +385,16 @@ void soundBlaster::playNotesArray(NoteElement * notesArray, unsigned int numberO
 	_currentIndexInNotesArray = 0;
 	_repeatFlagArray = repeat;
 	_playing = false;
+	ledcSetup(_PWMchannel, /*44100*/11025 * 2, 8);
 	_restartNotesInt(_NoteElementsArray[_currentIndexInNotesArray].duration);
 	ledcWriteTone(_PWMchannel, _NoteElementsArray[_currentIndexInNotesArray].note);
 }
 
 void soundBlaster::stop()
 {
-	if (_notesPlayerIsSet)
+	ledcWriteTone(_PWMchannel, 0);
+	if (_musicIsPlaying)
 	{
-		ledcWriteTone(_PWMchannel, 0);
 		timerAlarmDisable(timer);
 		timerDetachInterrupt(timer);
 		timerEnd(timer);
